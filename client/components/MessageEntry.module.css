@@ -1,0 +1,11 @@
+.message {
+    font-size: 1.5rem;
+}
+
+.info {
+    background: blue;
+}
+
+.error {
+    background: red;
+}

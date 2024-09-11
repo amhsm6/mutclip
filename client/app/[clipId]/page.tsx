@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useContext, useRef } from "react";
 import BodyRefContext from "@/contexts/BodyRefContext";
+// import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
-import type { Contents } from "@/types/clip";
-import { FaRegTrashCan } from "react-icons/fa6";
+import { Contents, Message, MessageType } from "@/types/clip";
+import { FaRegTrashCan, FaDownload } from "react-icons/fa6";
 import { FaRegCopy, FaPaste } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
@@ -28,8 +29,11 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const [loading, setLoading] = useState<boolean>(true);
 
+    // const [messages, setMessages] = useState<Message[]>([]);
+
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const downloaderRef = useRef<HTMLIFrameElement>(null);
 
     useEffect(() => {
         const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
@@ -39,11 +43,7 @@ export default function Page({ params }: Props): React.ReactNode {
                 const [contentType, ...rest] = msg.data.split(':');
                 const data = rest.join(':');
 
-                setContents({
-                    data: data,
-                    contentType: contentType || "text/plain"
-                });
-                setLoading(false);
+                update(data, contentType || "text/plain");
             }
         };
 
@@ -55,25 +55,50 @@ export default function Page({ params }: Props): React.ReactNode {
         };
     }, []);
 
-    const update = (data: string, type: string) => {
-        if (conn) {
-            conn.send(type + ":" + data);
+    useEffect(() => {
+        if (conn && conn.readyState === WebSocket.OPEN) {
+            setLoading(true);
+            conn.send(`${contents.contentType}:${contents.data}`);
         }
+    }, [contents.data, contents.contentType]);
+
+    const update = (data: string, type: string) => {
+        setContents({
+            data: data,
+            contentType: type
+        });
+        setLoading(false);
     };
 
-    const reset = () => update("", "text/plain");
+    const reset = () => {
+        update("", "text/plain");
+        //setMessages([]);
+    };
     
     const copy = async () => {
-        if (plainText) {
-            await navigator.clipboard.writeText(contents.data);
-        } else {
-            const bytes = fromBinaryString(atob(contents.data));
+        try {
+            if (plainText) {
+                await navigator.clipboard.writeText(contents.data);
+            } else {
+                const bytes = fromBinaryString(atob(contents.data));
 
-            await navigator.clipboard.write([
-                new ClipboardItem({
-                    [contents.contentType]: new Blob([bytes])
-                })
-            ]);
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        [contents.contentType]: new Blob([bytes])
+                    })
+                ]);
+            }
+
+            /*setMessages(msgs => [
+                { type: MessageType.INFO, text: "Contents Copied" },
+                ...msgs
+            ]);*/
+        } catch {
+            console.log("Copy failed");
+            /*setMessages(msgs => [
+                { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
+                ...msgs
+            ]);*/
         }
     };
 
@@ -84,10 +109,11 @@ export default function Page({ params }: Props): React.ReactNode {
         if (items.length !== 1) { return; }
         const item = items[0];
 
+        setLoading(true);
+
         switch (item.kind) {
             case "string":
                 item.getAsString(data => {
-                    setLoading(true);
                     update(data, "text/plain");
                 });
 
@@ -104,7 +130,6 @@ export default function Page({ params }: Props): React.ReactNode {
 
                     const bstr = e.target.result;
                     if (typeof bstr === "string") {
-                        setLoading(true);
                         update(btoa(bstr), item.type);
                     }
                 };
@@ -142,6 +167,13 @@ export default function Page({ params }: Props): React.ReactNode {
         };
     }, [conn, contents.data, contents.contentType]);
 
+    const download = () => {
+        const downloader = downloaderRef.current;
+        if (!downloader || plainText) { return; }
+
+        downloader.src = `data:application/octet-stream;base64,${contents.data}`;
+    };
+
     return (
         <div className={ styles.content }>
             <div className={ styles.input }>
@@ -157,13 +189,15 @@ export default function Page({ params }: Props): React.ReactNode {
                     <div>
                         <button className={ styles.reset } onClick={ reset }><FaRegTrashCan /></button>
                         <button className={ styles.copy } onClick={ copy }><FaRegCopy /></button>
+                        <button className={ styles.download } onClick={ download }><FaDownload /></button>
                     </div>
 
                     { loading && <ClipLoader className={ styles.loading } /> }
                 </div>
+                <iframe ref={ downloaderRef } style={{ display: "none" }}></iframe>
+                {/*<MessageBox messages={ messages } />*/}
             </div>
-
-            <div className={ styles.preview }>
+            <div className={ styles.preview } >
                 <Preview contents={ contents } />
             </div>
         </div>
