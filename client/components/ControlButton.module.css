@@ -1,0 +1,16 @@
+.button {
+    border: none;
+    font-size: 2rem;
+    color: black;
+    background: none;
+    transition: all 0.2s;
+}
+
+.button:hover {
+    color: #d44e9f;
+    transform: scale(1.1);
+}
+
+.button:active {
+    transform: scale(0.5);
+}

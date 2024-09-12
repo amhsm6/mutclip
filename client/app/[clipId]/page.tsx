@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useContext, useRef } from "react";
 import BodyRefContext from "@/contexts/BodyRefContext";
+import ControlButton from "@/components/ControlButton";
 // import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
 import { Contents, Message, MessageType } from "@/types/clip";
-import { FaRegTrashCan, FaDownload } from "react-icons/fa6";
+import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
 import { FaRegCopy, FaPaste } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
@@ -186,10 +187,19 @@ export default function Page({ params }: Props): React.ReactNode {
                     rows={ 10 }
                 />
                 <div className={ styles["bottom-row"] }>
-                    <div>
-                        <button className={ styles.reset } onClick={ reset }><FaRegTrashCan /></button>
-                        <button className={ styles.copy } onClick={ copy }><FaRegCopy /></button>
-                        <button className={ styles.download } onClick={ download }><FaDownload /></button>
+                    <div className={ styles.controls }>
+                        <ControlButton className={ styles.reset } onClick={ reset }>
+                            <FaRegTrashCan />
+                        </ControlButton>
+                        <ControlButton className={ styles.copy } onClick={ copy }>
+                            <FaRegCopy />
+                        </ControlButton>
+                        <ControlButton className={ styles.download } onClick={ download }>
+                            <FaDownload />
+                        </ControlButton>
+                        <ControlButton className={ styles.upload }>
+                            <FaUpload />
+                        </ControlButton>
                     </div>
 
                     { loading && <ClipLoader className={ styles.loading } /> }

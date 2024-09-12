@@ -21,58 +21,36 @@
 }
 
 .bottom-row {
-    position: relative;
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     margin-top: 10px;
-    margin-bottom: 30px;
+}
+
+.controls {
+    width: 55%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-left: 5%;
 }
 
 .reset {
-    margin-right: 60px;
     border: 2px dashed black;
     border-radius: 5px;
-    padding-top: 4px;
-    padding-bottom: 0px;
-    font-size: 2rem;
-    color: black;
-    background: none;
-    transition: all 0.2s;
 }
 
 .reset:hover {
     color: red;
     border: 2px dashed red;
-    transform: scale(1.1);
-}
-
-.reset:active {
-    transform: scale(0.5);
-}
-
-.copy {
-    border: none;
-    padding-top: 4px;
-    padding-bottom: 0px;
-    font-size: 2rem;
-    color: black;
-    background: none;
-    transition: all 0.2s;
 }
 
 .copy:hover {
     color: green;
-    transform: scale(1.1);
 }
 
-.copy:active {
-    transform: scale(0.5);
-}
-
-.loading {
-    position: absolute;
-    right: 0px;
+.download:hover {
+    color: blue;
 }
 
 .preview {
