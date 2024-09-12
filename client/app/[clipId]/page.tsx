@@ -11,6 +11,27 @@ import { FaRegCopy, FaPaste } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
 
+const serialize = (contents: Contents): string => {
+    if (contents.filename) {
+        return `${contents.contentType},${contents.filename}:${contents.data}`;
+    } else {
+        return `${contents.contentType}:${contents.data}`;
+    }
+};
+
+const deserialize = (message: string): Contents => {
+    const [header, ...rest] = message.split(':');
+
+    const [contentType, filename] = header.split(',');
+    const data = rest.join(':');
+
+    return {
+        data: data,
+        contentType: contentType || "text/plain",
+        filename: filename || null
+    };
+};
+
 const fromBinaryString = (bstr: string) => Uint8Array.from(bstr, x => x.charCodeAt(0));
 
 type Props = {
@@ -24,7 +45,8 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const [contents, setContents] = useState<Contents>({
         data: "",
-        contentType: "text/plain"
+        contentType: "text/plain",
+        filename: null
     });
     const plainText = contents.contentType === "text/plain";
 
@@ -34,17 +56,25 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
-    const downloaderRef = useRef<HTMLIFrameElement>(null);
+    const downloaderRef = useRef<HTMLAnchorElement>(null);
+    const uploaderRef = useRef<HTMLInputElement>(null);
+
+    const update = (data: string, type: string, filename: string | null) => {
+        setContents({
+            data: data,
+            contentType: type,
+            filename: filename
+        });
+        setLoading(false);
+    };
 
     useEffect(() => {
         const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
 
         ws.onmessage = msg => {
             if (msg) {
-                const [contentType, ...rest] = msg.data.split(':');
-                const data = rest.join(':');
-
-                update(data, contentType || "text/plain");
+                const { data, contentType, filename } = deserialize(msg.data);
+                update(data, contentType, filename);
             }
         };
 
@@ -59,21 +89,31 @@ export default function Page({ params }: Props): React.ReactNode {
     useEffect(() => {
         if (conn && conn.readyState === WebSocket.OPEN) {
             setLoading(true);
-            conn.send(`${contents.contentType}:${contents.data}`);
+            conn.send(serialize(contents));
         }
-    }, [contents.data, contents.contentType]);
-
-    const update = (data: string, type: string) => {
-        setContents({
-            data: data,
-            contentType: type
-        });
-        setLoading(false);
-    };
+    }, [contents.data, contents.contentType, contents.filename]);
 
     const reset = () => {
-        update("", "text/plain");
+        update("", "text/plain", null);
         //setMessages([]);
+    };
+
+    const putFile = (file: File) => {
+        setLoading(true);
+
+        const reader = new FileReader();
+
+        reader.onload = e => {
+            if (!e.target) { return; }
+
+            const bstr = e.target.result;
+            if (typeof bstr === "string") {
+                const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
+                update(btoa(bstr), type, file.name);
+            }
+        };
+
+        reader.readAsBinaryString(file);
     };
     
     const copy = async () => {
@@ -110,12 +150,11 @@ export default function Page({ params }: Props): React.ReactNode {
         if (items.length !== 1) { return; }
         const item = items[0];
 
-        setLoading(true);
-
         switch (item.kind) {
             case "string":
+                setLoading(true);
                 item.getAsString(data => {
-                    update(data, "text/plain");
+                    update(data, "text/plain", null);
                 });
 
                 break;
@@ -124,18 +163,7 @@ export default function Page({ params }: Props): React.ReactNode {
                 const file = item.getAsFile();
                 if (!file) { break; }
 
-                const reader = new FileReader();
-
-                reader.onload = e => {
-                    if (!e.target) { return; }
-
-                    const bstr = e.target.result;
-                    if (typeof bstr === "string") {
-                        update(btoa(bstr), item.type);
-                    }
-                };
-
-                reader.readAsBinaryString(file);
+                putFile(file);
 
                 break;
 
@@ -166,13 +194,30 @@ export default function Page({ params }: Props): React.ReactNode {
             body.onpaste = null;
             body.onkeydown = null;
         };
-    }, [conn, contents.data, contents.contentType]);
+    }, [conn, contents.data, contents.contentType, contents.filename]);
+
+    const initiateUpload = () => {
+        const uploader = uploaderRef.current;
+        if (!uploader) { return; }
+
+        uploader.click();
+    };
+
+    const upload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length !== 1) { return; }
+        const file = files[0];
+
+        putFile(file);
+    };
 
     const download = () => {
         const downloader = downloaderRef.current;
-        if (!downloader || plainText) { return; }
+        if (!downloader || plainText || !contents.filename) { return; }
 
-        downloader.src = `data:application/octet-stream;base64,${contents.data}`;
+        downloader.href = `data:application/octet-stream;base64,${contents.data}`;
+        downloader.download = contents.filename;
+        downloader.click();
     };
 
     return (
@@ -181,7 +226,7 @@ export default function Page({ params }: Props): React.ReactNode {
                 <textarea
                     ref={ inputRef }
                     value={ contents.data }
-                    onChange={ e => update(e.target.value, contents.contentType) }
+                    onChange={ e => update(e.target.value, contents.contentType, contents.filename) }
                     disabled={ !plainText }
                     autoFocus
                     rows={ 10 }
@@ -194,17 +239,22 @@ export default function Page({ params }: Props): React.ReactNode {
                         <ControlButton className={ styles.copy } onClick={ copy }>
                             <FaRegCopy />
                         </ControlButton>
+                        <ControlButton className={ styles.upload } onClick={ initiateUpload }>
+                            <FaUpload />
+                            <input
+                                ref={ uploaderRef }
+                                type="file"
+                                onChange={ upload }
+                                style={{ display: "none" }}
+                            />
+                        </ControlButton>
                         <ControlButton className={ styles.download } onClick={ download }>
                             <FaDownload />
-                        </ControlButton>
-                        <ControlButton className={ styles.upload }>
-                            <FaUpload />
+                            <a ref={ downloaderRef } style={{ display: "none" }}></a>
                         </ControlButton>
                     </div>
-
                     { loading && <ClipLoader className={ styles.loading } /> }
                 </div>
-                <iframe ref={ downloaderRef } style={{ display: "none" }}></iframe>
                 {/*<MessageBox messages={ messages } />*/}
             </div>
             <div className={ styles.preview } >

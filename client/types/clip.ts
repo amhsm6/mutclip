@@ -1,6 +1,7 @@
 export type Contents = {
     data: string,
-    contentType: string
+    contentType: string,
+    filename: string | null
 };
 
 export type Message = {

@@ -49,6 +49,10 @@
     color: green;
 }
 
+.upload:hover {
+    color: magenta;
+}
+
 .download:hover {
     color: blue;
 }
