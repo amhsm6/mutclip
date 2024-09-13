@@ -102,12 +102,8 @@
         width: 80%;
     }
 
-    .bottom-row {
-        justify-content: flex-start;
-        margin-left: 15px;
-    }
-
-    .reset {
-        margin-right: 30px;
+    .controls {
+        width: 60%;
+        margin-left: 0px;
     }
 }

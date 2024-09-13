@@ -43,10 +43,11 @@ type Props = {
 export default function Page({ params }: Props): React.ReactNode {
     const [conn, setConn] = useState<WebSocket | null>(null);
 
-    const [contents, setContents] = useState<Contents>({
+    const [contents, setContents] = useState<Contents & { incoming: boolean }>({
         data: "",
         contentType: "text/plain",
-        filename: null
+        filename: null,
+        incoming: false
     });
     const plainText = contents.contentType === "text/plain";
 
@@ -56,15 +57,16 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
-    const downloaderRef = useRef<HTMLAnchorElement>(null);
     const uploaderRef = useRef<HTMLInputElement>(null);
+    const downloaderRef = useRef<HTMLAnchorElement>(null);
 
-    const update = (data: string, type: string, filename: string | null) => {
-        setContents({
-            data: data,
-            contentType: type,
-            filename: filename
-        });
+    const updsend = (contents: Contents) => {
+        setContents({ ...contents, incoming: false });
+        setLoading(false);
+    };
+
+    const updrecv = (contents: Contents) => {
+        setContents({ ...contents, incoming: true });
         setLoading(false);
     };
 
@@ -72,10 +74,9 @@ export default function Page({ params }: Props): React.ReactNode {
         const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
 
         ws.onmessage = msg => {
-            if (msg) {
-                const { data, contentType, filename } = deserialize(msg.data);
-                update(data, contentType, filename);
-            }
+            if (!msg) { return; }
+
+            updrecv(deserialize(msg.data));
         };
 
         setConn(ws);
@@ -87,14 +88,18 @@ export default function Page({ params }: Props): React.ReactNode {
     }, []);
 
     useEffect(() => {
-        if (conn && conn.readyState === WebSocket.OPEN) {
+        if (!conn || conn.readyState !== WebSocket.OPEN || contents.incoming) { return () => {}; }
+
+        const timeout = setTimeout(() => {
             setLoading(true);
             conn.send(serialize(contents));
-        }
-    }, [contents.data, contents.contentType, contents.filename]);
+        }, 200);
+
+        return () => clearTimeout(timeout);
+    }, [contents.data, contents.contentType, contents.filename, contents.incoming]);
 
     const reset = () => {
-        update("", "text/plain", null);
+        updsend({ data: "", contentType: "text/plain", filename: null });
         //setMessages([]);
     };
 
@@ -109,7 +114,7 @@ export default function Page({ params }: Props): React.ReactNode {
             const bstr = e.target.result;
             if (typeof bstr === "string") {
                 const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
-                update(btoa(bstr), type, file.name);
+                updsend({ data: btoa(bstr), contentType: type, filename: file.name });
             }
         };
 
@@ -154,7 +159,7 @@ export default function Page({ params }: Props): React.ReactNode {
             case "string":
                 setLoading(true);
                 item.getAsString(data => {
-                    update(data, "text/plain", null);
+                    updsend({ data: data, contentType: "text/plain", filename: null });
                 });
 
                 break;
@@ -194,7 +199,7 @@ export default function Page({ params }: Props): React.ReactNode {
             body.onpaste = null;
             body.onkeydown = null;
         };
-    }, [conn, contents.data, contents.contentType, contents.filename]);
+    }, [conn, contents.data, contents.contentType, contents.filename, contents.incoming]);
 
     const initiateUpload = () => {
         const uploader = uploaderRef.current;
@@ -213,10 +218,10 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const download = () => {
         const downloader = downloaderRef.current;
-        if (!downloader || plainText || !contents.filename) { return; }
+        if (!downloader || plainText) { return; }
 
         downloader.href = `data:application/octet-stream;base64,${contents.data}`;
-        downloader.download = contents.filename;
+        downloader.download = contents.filename || "file";
         downloader.click();
     };
 
@@ -226,7 +231,7 @@ export default function Page({ params }: Props): React.ReactNode {
                 <textarea
                     ref={ inputRef }
                     value={ contents.data }
-                    onChange={ e => update(e.target.value, contents.contentType, contents.filename) }
+                    onChange={ e => updsend({ ...contents, data: e.target.value }) }
                     disabled={ !plainText }
                     autoFocus
                     rows={ 10 }
