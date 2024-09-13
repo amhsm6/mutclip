@@ -32,6 +32,8 @@ const deserialize = (message: string): Contents => {
     };
 };
 
+const toBinaryString = (buf: Uint8Array): string => buf.reduce((acc, x) => acc + String.fromCharCode(x), "");
+
 const fromBinaryString = (bstr: string) => Uint8Array.from(bstr, x => x.charCodeAt(0));
 
 type Props = {
@@ -77,6 +79,7 @@ export default function Page({ params }: Props): React.ReactNode {
             if (!msg) { return; }
 
             updrecv(deserialize(msg.data));
+            console.log("recv");
         };
 
         setConn(ws);
@@ -93,7 +96,8 @@ export default function Page({ params }: Props): React.ReactNode {
         const timeout = setTimeout(() => {
             setLoading(true);
             conn.send(serialize(contents));
-        }, 200);
+            console.log("send");
+        }, 500);
 
         return () => clearTimeout(timeout);
     }, [contents.data, contents.contentType, contents.filename, contents.incoming]);
@@ -110,19 +114,22 @@ export default function Page({ params }: Props): React.ReactNode {
 
         reader.onload = e => {
             if (!e.target) { return; }
+            const res = e.target.result;
+            if (!(res instanceof ArrayBuffer)) { return; }
 
-            const bstr = e.target.result;
-            if (typeof bstr === "string") {
-                const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
-                updsend({ data: btoa(bstr), contentType: type, filename: file.name });
-            }
+            const buf = new Uint8Array(res);
+
+            const data = btoa(toBinaryString(buf));
+            const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
+
+            updsend({ data: data, contentType: type, filename: file.name });
         };
 
-        reader.readAsBinaryString(file);
+        reader.readAsArrayBuffer(file);
     };
     
     const copy = async () => {
-        try {
+        // try {
             if (plainText) {
                 await navigator.clipboard.writeText(contents.data);
             } else {
@@ -139,13 +146,13 @@ export default function Page({ params }: Props): React.ReactNode {
                 { type: MessageType.INFO, text: "Contents Copied" },
                 ...msgs
             ]);*/
-        } catch {
-            console.log("Copy failed");
-            /*setMessages(msgs => [
-                { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
-                ...msgs
-            ]);*/
-        }
+        // } catch {
+        //     console.log("Copy failed");
+        //     /*setMessages(msgs => [
+        //         { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
+        //         ...msgs
+        //     ]);*/
+        // }
     };
 
     const paste = (e: ClipboardEvent) => {
