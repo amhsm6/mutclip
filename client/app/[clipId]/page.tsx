@@ -79,7 +79,6 @@ export default function Page({ params }: Props): React.ReactNode {
             if (!msg) { return; }
 
             updrecv(deserialize(msg.data));
-            console.log("recv");
         };
 
         setConn(ws);
@@ -96,7 +95,6 @@ export default function Page({ params }: Props): React.ReactNode {
         const timeout = setTimeout(() => {
             setLoading(true);
             conn.send(serialize(contents));
-            console.log("send");
         }, 500);
 
         return () => clearTimeout(timeout);
