@@ -15,6 +15,7 @@ import qualified Data.Text.Lazy as T
 import qualified Data.Map as M
 import Data.Aeson.Lens
 import Text.Printf
+import System.IO (stdout, hSetBuffering, BufferMode(..))
 import Servant
 import Servant.API.WebSocket
 import Network.WebSockets
@@ -80,6 +81,8 @@ server = newclipH :<|> wsH
 
 main :: IO ()
 main = do
+    hSetBuffering stdout NoBuffering
+
     tclips <- atomically $ newTVar M.empty
 
     forkIO $ cleanup tclips
