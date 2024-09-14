@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
@@ -10,16 +9,14 @@ import Control.Monad.Reader
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Exception (handle)
-import qualified Data.Text.Lazy as T
 import qualified Data.Map as M
 import Data.Aeson.Lens
-import Text.Printf
 import System.IO (stdout, hSetBuffering, BufferMode(..))
 import Servant
 import Servant.API.WebSocket
-import Network.WebSockets
 import Network.Wai.Handler.Warp
+
+import Clipboard
 
 type Api = "newclip" :> Get '[JSON] String
       :<|> "ws" :> Capture "id" Int :> WebSocket
@@ -28,12 +25,6 @@ api :: Proxy Api
 api = Proxy
 
 type Clips = M.Map Int Clipboard
-
-data Clipboard = Clipboard { _contents :: T.Text
-                           , _clients :: M.Map Int Connection
-                           }
-
-makeLenses ''Clipboard
 
 cleanup :: TVar Clips -> IO ()
 cleanup tclips = forever $ do
@@ -55,29 +46,12 @@ server = newclipH :<|> wsH
           wsH clipboardId conn = do
               tclips <- ask
               liftIO $ do
-                  connId <- atomically $ do
-                      conns <- view (ix clipboardId . clients) <$> readTVar tclips
-                      let connId = conns ^. pre (traverseMax . asIndex . to (+1)) . non 0
-
-                      modifyTVar tclips $ at clipboardId . anon (Clipboard T.empty M.empty) (const False) . clients . at connId .~ Just conn
-
-                      pure connId
-
-                  putStrLn $ printf "[%d]: connect: %d" clipboardId connId
-
-                  atomically (readTVar tclips) >>= sendTextData conn . view (ix clipboardId . contents)
-
-                  let onClose :: ConnectionException -> IO ()
-                      onClose _ = do
-                          putStrLn $ printf "[%d]: disconnect: %d" clipboardId connId
-                          atomically $ modifyTVar tclips $ ix clipboardId . clients . at connId .~ Nothing
-
-                  handle onClose $ do
-                      forever $ do
-                          upd <- receiveData conn
-                          atomically $ modifyTVar tclips $ ix clipboardId . contents .~ upd
-
-                          atomically (readTVar tclips) >>= mapMOf_ (ix clipboardId . clients . traverse) (\c -> sendTextData c upd)
+                  atomically $ do
+                      modifyTVar tclips $ at clipboardId %~ maybe (Just $ Clipboard mempty mempty) Just
+                  
+                  let l :: Lens' Clips Clipboard
+                      l = at clipboardId . lens (maybe undefined id) (flip $ set _Just)
+                  runWorkerT (work clipboardId) $ State l tclips conn
 
 main :: IO ()
 main = do
