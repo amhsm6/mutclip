@@ -1,6 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Clipboard where
@@ -54,10 +53,15 @@ connect = do
     pure connId
 
 send :: T.Text -> Connection -> WorkerT IO ()
-send msg conn = liftIO $ sendTextData conn msg
+send msg conn = liftIO $ do
+    sendTextData conn $ T.singleton 'A'
+    sendTextData conn $ 'M' `T.cons` msg
 
 recv :: WorkerT IO T.Text
 recv = me >>= liftIO . receiveData
+
+sync :: WorkerT IO ()
+sync = me >>= \conn -> liftIO $ sendTextData conn $ T.singleton 'Y'
 
 handle :: Exception e => (e -> WorkerT IO a) -> WorkerT IO a -> WorkerT IO a
 handle handler m = do
@@ -79,10 +83,14 @@ work clipboardId = do
     handle onClose $ do
         forever $ do
             upd <- recv
-            liftIO $ putStrLn $ printf "Got message @ [%d]" clipboardId
             atom $ alter $ contents .~ upd
 
-            clip <- atom get
-            iforMOf_ (clients . itraversed) clip $ \i c -> do
-                liftIO $ putStrLn $ printf "Send message to %d @ [%d]" i clipboardId
+            liftIO $ putStrLn $ printf "[%d] FROM %d: %s" clipboardId connId $ T.take 1024 upd
+
+            s <- atom get
+            iforMOf_ (clients . itraversed . ifiltered (const . (/=connId))) s $ \i c -> do
+                liftIO $ putStrLn $ printf "[%d] TO %d" clipboardId i
                 send upd c
+
+            liftIO $ putStrLn $ printf "[%d] SYNC %d" clipboardId connId
+            sync

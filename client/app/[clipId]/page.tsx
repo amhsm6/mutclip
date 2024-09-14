@@ -45,11 +45,10 @@ type Props = {
 export default function Page({ params }: Props): React.ReactNode {
     const [conn, setConn] = useState<WebSocket | null>(null);
 
-    const [contents, setContents] = useState<Contents & { incoming: boolean }>({
+    const [contents, setContents] = useState<Contents & { incoming?: boolean }>({
         data: "",
         contentType: "text/plain",
-        filename: null,
-        incoming: false
+        filename: null
     });
     const plainText = contents.contentType === "text/plain";
 
@@ -62,23 +61,29 @@ export default function Page({ params }: Props): React.ReactNode {
     const uploaderRef = useRef<HTMLInputElement>(null);
     const downloaderRef = useRef<HTMLAnchorElement>(null);
 
-    const updsend = (contents: Contents) => {
-        setContents({ ...contents, incoming: false });
-        setLoading(false);
-    };
-
-    const updrecv = (contents: Contents) => {
-        setContents({ ...contents, incoming: true });
-        setLoading(false);
-    };
-
     useEffect(() => {
         const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
 
         ws.onmessage = msg => {
-            if (!msg) { return; }
+            if (!msg || !msg.data || msg.data.length === 0) { return; }
 
-            updrecv(deserialize(msg.data));
+            const control = msg.data[0];
+            switch (control) {
+                case 'A':
+                    setLoading(true);
+                    break;
+                
+                case 'M':
+                    setContents({ ...deserialize(msg.data.slice(1)), incoming: true });
+                    setLoading(false);
+                    break;
+
+                case 'Y':
+                    setLoading(false);
+                    break;
+                
+                default:
+            }
         };
 
         setConn(ws);
@@ -101,7 +106,7 @@ export default function Page({ params }: Props): React.ReactNode {
     }, [contents.data, contents.contentType, contents.filename, contents.incoming]);
 
     const reset = () => {
-        updsend({ data: "", contentType: "text/plain", filename: null });
+        setContents({ data: "", contentType: "text/plain", filename: null });
         //setMessages([]);
     };
 
@@ -120,14 +125,15 @@ export default function Page({ params }: Props): React.ReactNode {
             const data = btoa(toBinaryString(buf));
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
 
-            updsend({ data: data, contentType: type, filename: file.name });
+            setContents({ data: data, contentType: type, filename: file.name });
+            setLoading(false);
         };
 
         reader.readAsArrayBuffer(file);
     };
     
     const copy = async () => {
-        // try {
+        try {
             if (plainText) {
                 await navigator.clipboard.writeText(contents.data);
             } else {
@@ -144,13 +150,13 @@ export default function Page({ params }: Props): React.ReactNode {
                 { type: MessageType.INFO, text: "Contents Copied" },
                 ...msgs
             ]);*/
-        // } catch {
-        //     console.log("Copy failed");
-        //     /*setMessages(msgs => [
+        } catch (e) {
+            console.log(e);
+        //     console.log("Copy failed"); //     /*setMessages(msgs => [
         //         { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
         //         ...msgs
         //     ]);*/
-        // }
+        }
     };
 
     const paste = (e: ClipboardEvent) => {
@@ -163,8 +169,10 @@ export default function Page({ params }: Props): React.ReactNode {
         switch (item.kind) {
             case "string":
                 setLoading(true);
+
                 item.getAsString(data => {
-                    updsend({ data: data, contentType: "text/plain", filename: null });
+                    setContents({ data: data, contentType: "text/plain", filename: null });
+                    setLoading(false);
                 });
 
                 break;
@@ -204,7 +212,7 @@ export default function Page({ params }: Props): React.ReactNode {
             body.onpaste = null;
             body.onkeydown = null;
         };
-    }, [conn, contents.data, contents.contentType, contents.filename, contents.incoming]);
+    }, [conn, contents.data, contents.contentType, contents.filename]);
 
     const initiateUpload = () => {
         const uploader = uploaderRef.current;
@@ -236,7 +244,7 @@ export default function Page({ params }: Props): React.ReactNode {
                 <textarea
                     ref={ inputRef }
                     value={ contents.data }
-                    onChange={ e => updsend({ ...contents, data: e.target.value }) }
+                    onChange={ e => setContents({ ...contents, data: e.target.value, incoming: false }) }
                     disabled={ !plainText }
                     autoFocus
                     rows={ 10 }
