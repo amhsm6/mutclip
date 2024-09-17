@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
 import BodyRefContext from "@/contexts/BodyRefContext";
 import ControlButton from "@/components/ControlButton";
-// import MessageBox from "@/components/MessageBox";
+import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
 import { Contents, Message, MessageType } from "@/types/clip";
 import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
@@ -54,7 +54,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const [loading, setLoading] = useState<boolean>(true);
 
-    // const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -107,10 +107,12 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const reset = () => {
         setContents({ data: "", contentType: "text/plain", filename: null });
-        //setMessages([]);
+        setMessages([]);
     };
 
     const putFile = (file: File) => {
+        if (file.size > 10 * 1024 * 1024) { return; }
+
         setLoading(true);
 
         const reader = new FileReader();
@@ -146,16 +148,16 @@ export default function Page({ params }: Props): React.ReactNode {
                 ]);
             }
 
-            /*setMessages(msgs => [
+            setMessages(msgs => [
                 { type: MessageType.INFO, text: "Contents Copied" },
                 ...msgs
-            ]);*/
+            ]);
         } catch (e) {
             console.log(e);
-        //     console.log("Copy failed"); //     /*setMessages(msgs => [
-        //         { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
-        //         ...msgs
-        //     ]);*/
+            setMessages(msgs => [
+                { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
+                ...msgs
+            ]);
         }
     };
 
@@ -271,9 +273,11 @@ export default function Page({ params }: Props): React.ReactNode {
                             <a ref={ downloaderRef } style={{ display: "none" }}></a>
                         </ControlButton>
                     </div>
-                    { loading && <ClipLoader className={ styles.loading } /> }
+                    { loading && <ClipLoader /> }
                 </div>
-                {/*<MessageBox messages={ messages } />*/}
+                <div className={ styles["message-box"] }>
+                    <MessageBox messages={ messages } />
+                </div>
             </div>
             <div className={ styles.preview } >
                 <Preview contents={ contents } />

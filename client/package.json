@@ -10,6 +10,7 @@
     "extract": "cp -r .next/standalone dist && cp -r .next/static dist/.next && tar czvf dist.tar.gz dist && rm -rf dist"
   },
   "dependencies": {
+    "@react-spring/web": "^9.7.4",
     "next": "14.2.7",
     "react": "^18",
     "react-dom": "^18",

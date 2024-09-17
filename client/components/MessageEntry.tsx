@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Message, MessageType } from "@/types/clip";
 import styles from "./MessageEntry.module.css";
 
@@ -22,7 +22,7 @@ export default function MessageEntry({ message }: Props): React.ReactNode {
     }
 
     return (
-        <div className={ `${styles.message} ${typeclass}` } >
+        <div className={ `${styles.message} ${typeclass}` }>
             <span>{ message.text }</span>
         </div>
     );
