@@ -1,5 +1,5 @@
 export type Contents = {
-    data: string,
+    data: Blob,
     contentType: string,
     filename: string | null
 };

@@ -11,30 +11,31 @@ import { FaRegCopy, FaPaste } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
 
-const serialize = (contents: Contents): string => {
-    if (contents.filename) {
-        return `${contents.contentType},${contents.filename}:${contents.data}`;
-    } else {
-        return `${contents.contentType}:${contents.data}`;
-    }
+const encode = (contents: Contents): Blob => {
+    return new Blob([
+        contents.contentType,
+        "<",
+        contents.filename || "",
+        ">",
+        contents.data
+    ]);
 };
 
-const deserialize = (message: string): Contents => {
-    const [header, ...rest] = message.split(':');
+const decode = async (buf: Blob): Promise<Contents> => {
+    const text = await buf.text();
 
-    const [contentType, filename] = header.split(',');
-    const data = rest.join(':');
+    const [type, ...rest] = text.split('<');
+    const [name] = rest.join().split('>');
+    const databegin = type.length + 1 + name.length + 1;
 
     return {
-        data: data,
-        contentType: contentType || "text/plain",
-        filename: filename || null
+        data: buf.slice(databegin),
+        contentType: type || "text/plain",
+        filename: name || null
     };
 };
 
 const toBinaryString = (buf: Uint8Array): string => buf.reduce((acc, x) => acc + String.fromCharCode(x), "");
-
-const fromBinaryString = (bstr: string) => Uint8Array.from(bstr, x => x.charCodeAt(0));
 
 type Props = {
     params: {
@@ -46,15 +47,17 @@ export default function Page({ params }: Props): React.ReactNode {
     const [conn, setConn] = useState<WebSocket | null>(null);
 
     const [contents, setContents] = useState<Contents & { incoming?: boolean }>({
-        data: "",
+        data: new Blob(),
         contentType: "text/plain",
         filename: null
     });
     const plainText = contents.contentType === "text/plain";
 
+    const [renderedContents, setRenderedContents] = useState<string>("");
+
     const [loading, setLoading] = useState<boolean>(true);
 
-    const [messages, setMessages] = useState<Message[]>([]);
+    // const [messages, setMessages] = useState<Message[]>([]);
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -64,25 +67,24 @@ export default function Page({ params }: Props): React.ReactNode {
     useEffect(() => {
         const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
 
-        ws.onmessage = msg => {
-            if (!msg || !msg.data || msg.data.length === 0) { return; }
+        ws.onmessage = async (msg: MessageEvent<Blob | string>) => {
+            const buf = msg.data;
 
-            const control = msg.data[0];
-            switch (control) {
-                case 'A':
-                    setLoading(true);
-                    break;
-                
-                case 'M':
-                    setContents({ ...deserialize(msg.data.slice(1)), incoming: true });
-                    setLoading(false);
-                    break;
-
-                case 'Y':
-                    setLoading(false);
-                    break;
-                
-                default:
+            if (typeof buf === "string") {
+                switch (buf) {
+                    case 'A':
+                        setLoading(true)
+                        break;
+                    
+                    case 'S':
+                        setLoading(false)
+                        break;
+                    
+                    default:
+                }
+            } else {
+                const decoded = await decode(buf);
+                setContents({ ...decoded, incoming: true });
             }
         };
 
@@ -99,18 +101,41 @@ export default function Page({ params }: Props): React.ReactNode {
 
         const timeout = setTimeout(() => {
             setLoading(true);
-            conn.send(serialize(contents));
+            conn.send(encode(contents));
         }, 500);
 
         return () => clearTimeout(timeout);
     }, [contents.data, contents.contentType, contents.filename, contents.incoming]);
 
+    useEffect(() => {
+        if (plainText) {
+            contents.data.text()
+                .then(setRenderedContents)
+                .then(() => setLoading(false));
+        } else {
+            contents.data.arrayBuffer()
+                .then(buf => new Uint8Array(buf))
+                .then(toBinaryString)
+                .then(btoa)
+                .then(setRenderedContents)
+                .then(() => setLoading(false));
+        }
+    }, [contents.data, contents.contentType, contents.filename]);
+
     const reset = () => {
-        setContents({ data: "", contentType: "text/plain", filename: null });
-        setMessages([]);
+        setContents({ data: new Blob(), contentType: "text/plain", filename: null });
+        // setMessages([]);
     };
 
-    const putFile = (file: File) => {
+    const setText = (x: string) => {
+        setContents({
+            data: new Blob([x]),
+            contentType: "text/plain",
+            filename: null
+        });
+    };
+
+    const setFile = (file: File) => {
         if (file.size > 10 * 1024 * 1024) { return; }
 
         setLoading(true);
@@ -122,43 +147,43 @@ export default function Page({ params }: Props): React.ReactNode {
             const res = e.target.result;
             if (!(res instanceof ArrayBuffer)) { return; }
 
-            const buf = new Uint8Array(res);
-
-            const data = btoa(toBinaryString(buf));
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
 
-            setContents({ data: data, contentType: type, filename: file.name });
-            setLoading(false);
+            setContents({
+                data: new Blob([res]),
+                contentType: type,
+                filename: file.name
+            });
         };
 
         reader.readAsArrayBuffer(file);
     };
     
     const copy = async () => {
-        try {
-            if (plainText) {
-                await navigator.clipboard.writeText(contents.data);
-            } else {
-                const bytes = fromBinaryString(atob(contents.data));
+        // try {
+        //     if (plainText) {
+        //         await navigator.clipboard.writeText(contents.data);
+        //     } else {
+        //         const bytes = fromBinaryString(atob(contents.data));
 
-                await navigator.clipboard.write([
-                    new ClipboardItem({
-                        [contents.contentType]: new Blob([bytes])
-                    })
-                ]);
-            }
+        //         await navigator.clipboard.write([
+        //             new ClipboardItem({
+        //                 [contents.contentType]: new Blob([bytes])
+        //             })
+        //         ]);
+        //     }
 
-            setMessages(msgs => [
-                { type: MessageType.INFO, text: "Contents Copied" },
-                ...msgs
-            ]);
-        } catch (e) {
-            console.log(e);
-            setMessages(msgs => [
-                { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
-                ...msgs
-            ]);
-        }
+        //     // setMessages(msgs => [
+        //     //     { type: MessageType.INFO, text: "Contents Copied" },
+        //     //     ...msgs
+        //     // ]);
+        // } catch (e) {
+        //     console.log(e);
+        //     // setMessages(msgs => [
+        //     //     { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
+        //     //     ...msgs
+        //     // ]);
+        // }
     };
 
     const paste = (e: ClipboardEvent) => {
@@ -172,10 +197,7 @@ export default function Page({ params }: Props): React.ReactNode {
             case "string":
                 setLoading(true);
 
-                item.getAsString(data => {
-                    setContents({ data: data, contentType: "text/plain", filename: null });
-                    setLoading(false);
-                });
+                item.getAsString(setText);
 
                 break;
 
@@ -183,7 +205,7 @@ export default function Page({ params }: Props): React.ReactNode {
                 const file = item.getAsFile();
                 if (!file) { break; }
 
-                putFile(file);
+                setFile(file);
 
                 break;
 
@@ -228,14 +250,14 @@ export default function Page({ params }: Props): React.ReactNode {
         if (!files || files.length !== 1) { return; }
         const file = files[0];
 
-        putFile(file);
+        setFile(file);
     };
 
     const download = () => {
         const downloader = downloaderRef.current;
         if (!downloader || plainText) { return; }
 
-        downloader.href = `data:application/octet-stream;base64,${contents.data}`;
+        downloader.href = URL.createObjectURL(contents.data);
         downloader.download = contents.filename || "file";
         downloader.click();
     };
@@ -245,8 +267,8 @@ export default function Page({ params }: Props): React.ReactNode {
             <div className={ styles.input }>
                 <textarea
                     ref={ inputRef }
-                    value={ contents.data }
-                    onChange={ e => setContents({ ...contents, data: e.target.value, incoming: false }) }
+                    value={ renderedContents }
+                    onChange={ e => setText(e.target.value) }
                     disabled={ !plainText }
                     autoFocus
                     rows={ 10 }
@@ -276,7 +298,7 @@ export default function Page({ params }: Props): React.ReactNode {
                     { loading && <ClipLoader /> }
                 </div>
                 <div className={ styles["message-box"] }>
-                    <MessageBox messages={ messages } />
+                    {/* <MessageBox messages={ messages } /> */}
                 </div>
             </div>
             <div className={ styles.preview } >

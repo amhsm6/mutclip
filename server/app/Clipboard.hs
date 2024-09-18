@@ -10,16 +10,17 @@ import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Exception (Exception, SomeException, catch)
+import qualified Data.ByteString.Lazy as B
 import qualified Data.Text.Lazy as T
 import qualified Data.Map as M
 import Text.Printf
-import Network.WebSockets (Connection, sendTextData, receiveData, withPingPong, defaultPingPongOptions)
+import Network.WebSockets (Connection, sendTextData, sendBinaryData, receiveData, withPingPong, defaultPingPongOptions)
 
 type WorkerT = ReaderT State
 
 data State = forall a. State (Lens' a Clipboard) (TVar a) Connection
 
-data Clipboard = Clipboard { _contents :: T.Text
+data Clipboard = Clipboard { _contents :: B.ByteString
                            , _clients :: M.Map Int Connection
                            }
 
@@ -61,16 +62,16 @@ pingpong m = do
     (State l x c) <- ask
     liftIO $ withPingPong defaultPingPongOptions c $ runWorkerT m . State l x
 
-send :: T.Text -> Connection -> WorkerT IO ()
+send :: B.ByteString -> Connection -> WorkerT IO ()
 send msg conn = liftIO $ do
     sendTextData conn $ T.singleton 'A'
-    sendTextData conn $ 'M' `T.cons` msg
+    sendBinaryData conn msg
 
-recv :: WorkerT IO T.Text
+recv :: WorkerT IO B.ByteString
 recv = me >>= liftIO . receiveData
 
 sync :: WorkerT IO ()
-sync = me >>= \conn -> liftIO $ sendTextData conn $ T.singleton 'Y'
+sync = me >>= \conn -> liftIO $ sendTextData conn $ T.singleton 'S'
 
 handle :: Exception e => (e -> WorkerT IO a) -> WorkerT IO a -> WorkerT IO a
 handle handler m = do
@@ -95,7 +96,7 @@ work clipboardId = do
                 upd <- recv
                 atom $ alter $ contents .~ upd
 
-                liftIO $ putStrLn $ printf "[%d] FROM %d: %s" clipboardId connId $ T.take 1024 upd
+                liftIO $ putStrLn $ printf "[%d] FROM %d" clipboardId connId
 
                 tsent <- atom $ lift $ newTVar 0
 

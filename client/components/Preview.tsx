@@ -13,6 +13,6 @@ export default function Preview({ contents }: Props): React.ReactNode {
         return null;
     }
 
-    const src = `data:${contents.contentType};base64,${contents.data}`;
+    const src = URL.createObjectURL(contents.data);
     return <img className={ styles.img } src={ src } />;
 }

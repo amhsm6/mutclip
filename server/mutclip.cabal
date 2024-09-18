@@ -20,6 +20,7 @@ executable mutclip
                     , mtl
                     , lens
                     , stm
+                    , bytestring
                     , text
                     , containers
                     , lens-aeson
