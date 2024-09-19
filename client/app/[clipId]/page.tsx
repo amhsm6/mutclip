@@ -65,7 +65,7 @@ export default function Page({ params }: Props): React.ReactNode {
     const downloaderRef = useRef<HTMLAnchorElement>(null);
 
     useEffect(() => {
-        const ws = new WebSocket(`${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
+        const ws = new WebSocket(`/api/ws/${params.clipId}`);
 
         ws.onmessage = async (msg: MessageEvent<Blob | string>) => {
             const buf = msg.data;
