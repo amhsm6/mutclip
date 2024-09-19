@@ -83,12 +83,12 @@ work clipboardId = do
     connId <- atom connect
     liftIO $ putStrLn $ printf "[%d] connect: %d" clipboardId connId
 
-    let onClose :: SomeException -> WorkerT IO ()
-        onClose _ = do
+    let disconnect :: SomeException -> WorkerT IO ()
+        disconnect _ = do
             liftIO $ putStrLn $ printf "[%d] disconnect: %d" clipboardId connId
             atom $ alter $ clients . at connId .~ Nothing
 
-    handle onClose $ do
+    handle disconnect $ do
         pingpong $ do
             join $ liftM2 send (atom $ view contents <$> get) me
 
@@ -96,7 +96,7 @@ work clipboardId = do
                 upd <- recv
                 atom $ alter $ contents .~ upd
 
-                liftIO $ putStrLn $ printf "[%d] FROM %d" clipboardId connId
+                liftIO $ putStrLn $ printf "[%d] FROM %d %s" clipboardId connId (show $ B.take 1024 upd)
 
                 tsent <- atom $ lift $ newTVar 0
 
@@ -108,8 +108,8 @@ work clipboardId = do
 
                         atom $ lift $ modifyTVar tsent (+1)
 
-                let msgs = length $ s ^. clients
-                atom $ lift $ readTVar tsent >>= check . (==msgs-1)
+                let msgs = length (s ^. clients) - 1
+                atom $ lift $ readTVar tsent >>= check . (==msgs)
 
                 liftIO $ putStrLn $ printf "[%d] SYNC %d" clipboardId connId
                 sync

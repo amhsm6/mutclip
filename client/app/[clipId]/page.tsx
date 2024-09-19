@@ -160,30 +160,29 @@ export default function Page({ params }: Props): React.ReactNode {
     };
     
     const copy = async () => {
-        // try {
-        //     if (plainText) {
-        //         await navigator.clipboard.writeText(contents.data);
-        //     } else {
-        //         const bytes = fromBinaryString(atob(contents.data));
+        try {
+            if (plainText) {
+                await contents.data.text()
+                    .then(navigator.clipboard.writeText);
+            } else {
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        [contents.contentType]: contents.data
+                    })
+                ]);
+            }
 
-        //         await navigator.clipboard.write([
-        //             new ClipboardItem({
-        //                 [contents.contentType]: new Blob([bytes])
-        //             })
-        //         ]);
-        //     }
-
-        //     // setMessages(msgs => [
-        //     //     { type: MessageType.INFO, text: "Contents Copied" },
-        //     //     ...msgs
-        //     // ]);
-        // } catch (e) {
-        //     console.log(e);
-        //     // setMessages(msgs => [
-        //     //     { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
-        //     //     ...msgs
-        //     // ]);
-        // }
+            // setMessages(msgs => [
+            //     { type: MessageType.INFO, text: "Contents Copied" },
+            //     ...msgs
+            // ]);
+        } catch (e) {
+            console.log(e);
+            // setMessages(msgs => [
+            //     { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
+            //     ...msgs
+            // ]);
+        }
     };
 
     const paste = (e: ClipboardEvent) => {
