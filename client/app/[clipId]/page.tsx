@@ -65,7 +65,7 @@ export default function Page({ params }: Props): React.ReactNode {
     const downloaderRef = useRef<HTMLAnchorElement>(null);
 
     useEffect(() => {
-        const ws = new WebSocket(`/api/ws/${params.clipId}`);
+        const ws = new WebSocket(process.env.NODE_ENV === "production" ? `/api/ws/${params.clipId}` : `${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
 
         ws.onmessage = async (msg: MessageEvent<Blob | string>) => {
             const buf = msg.data;
@@ -161,16 +161,11 @@ export default function Page({ params }: Props): React.ReactNode {
     
     const copy = async () => {
         try {
-            if (plainText) {
-                await contents.data.text()
-                    .then(navigator.clipboard.writeText);
-            } else {
-                await navigator.clipboard.write([
-                    new ClipboardItem({
-                        [contents.contentType]: contents.data
-                    })
-                ]);
-            }
+            await navigator.clipboard.write([
+                new ClipboardItem({
+                    [contents.contentType]: contents.data
+                })
+            ]);
 
             // setMessages(msgs => [
             //     { type: MessageType.INFO, text: "Contents Copied" },
