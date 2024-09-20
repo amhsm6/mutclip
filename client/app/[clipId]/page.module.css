@@ -40,21 +40,23 @@
     border-radius: 5px;
 }
 
-.reset:hover {
-    color: red;
-    border: 2px dashed red;
-}
+@media screen and (pointer: fine) {
+    .reset:hover {
+        color: red;
+        border: 2px dashed red;
+    }
 
-.copy:hover {
-    color: green;
-}
+    .copy:hover {
+        color: green;
+    }
 
-.upload:hover {
-    color: magenta;
-}
+    .upload:hover {
+        color: magenta;
+    }
 
-.download:hover {
-    color: blue;
+    .download:hover {
+        color: blue;
+    }
 }
 
 .message-box {

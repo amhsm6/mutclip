@@ -1,9 +1,20 @@
 .message {
-    margin-bottom: 10px;
     padding: 8px;
     box-shadow: 0px 5px;
     border-radius: 10px;
     font-size: 1.2rem;
+    transition: all 0.3s;
+    animation: appear 0.3s;
+}
+
+@keyframes appear {
+    from {
+        transform: translateX(-100px);
+    }
+
+    to {
+        transform: translateX(0px);
+    }
 }
 
 .info {

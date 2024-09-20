@@ -6,11 +6,19 @@
     transition: all 0.2s;
 }
 
-.button:hover {
-    color: #d44e9f;
-    transform: scale(1.1);
+@media screen and (pointer: fine) {
+    .button:hover {
+        color: #d44e9f;
+        transform: scale(1.1);
+    }
+
+    .button:active {
+        transform: scale(0.5);
+    }
 }
 
-.button:active {
-    transform: scale(0.5);
+@media screen and (pointer: coarse) {
+    .button:active {
+        transform: scale(0.5);
+    }
 }

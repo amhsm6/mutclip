@@ -76,7 +76,7 @@ sync = me >>= \conn -> liftIO $ sendTextData conn $ T.singleton 'S'
 handle :: Exception e => (e -> WorkerT IO a) -> WorkerT IO a -> WorkerT IO a
 handle handler m = do
     s <- ask
-    liftIO $ (runWorkerT m s) `catch` (\e -> runWorkerT (handler e) s)
+    liftIO $ runWorkerT m s `catch` (\e -> runWorkerT (handler e) s)
 
 work :: Int -> WorkerT IO ()
 work clipboardId = do

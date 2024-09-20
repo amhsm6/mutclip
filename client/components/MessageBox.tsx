@@ -1,29 +1,48 @@
 "use client";
 
-import React from "react";
-import MessageEntry from "@/components/MessageEntry";
+import React, { useState, useEffect, useRef } from "react";
+import MessageEntry, { EntryProps } from "@/components/MessageEntry";
 import type { Message } from "@/types/clip";
-import { animated, useSpring } from "@react-spring/web";
 import styles from "./MessageBox.module.css";
 
-const Entry = animated(MessageEntry);
+type Props = { message: Message | null };
 
-type Props = { messages: Message[] };
+type Entry = {
+    props: EntryProps,
+    id: number
+};
 
-export default function MessageBox({ messages }: Props): React.ReactNode {
-    const [spring, api] = useSpring(() => ({
-        from: { x: -100 },
-        to: { x: 0 }
-    }));
+export default function MessageBox({ message }: Props): React.ReactNode {
+    const [entries, setEntries] = useState<Entry[]>([]);
+    const newEntryId = useRef<number>(0);
 
-    api.start({
-        from: { x: -100 },
-        to: { x: 0 }
-    });
+    useEffect(() => {
+        if (!message) {
+            setEntries([]);
+            newEntryId.current = 0;
+            return;
+        }
+
+        setEntries(es => [
+            { props: { message, animation: 0 }, id: newEntryId.current++ },
+            ...es.map(({ props, ...e }) => ({ ...e, props: { ...props, animation: props.animation + 1 } }))
+        ]);
+    }, [message]);
+
+    useEffect(() => {
+        if (!entries.length) { return; }
+
+        const id = entries[0].id;
+        setTimeout(() => {
+            setEntries(es => es.map(e => e.id === id ? { ...e, props: { ...e.props, animation: -1 } } : e));
+
+            setTimeout(() => setEntries(es => es.filter(e => e.id !== id)), 500);
+        }, 1500);
+    }, [entries.length]);
 
     return (
         <div className={ styles.box }>
-            { messages.map((x, i) => <Entry message={ x } key={ i } style={{ ...spring }} />) }
+            { entries.map((e, i) => <MessageEntry { ...e.props } key={ e.id } />) }
         </div>
     );
 }

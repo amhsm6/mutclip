@@ -55,9 +55,9 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const [renderedContents, setRenderedContents] = useState<string>("");
 
-    const [loading, setLoading] = useState<boolean>(true);
+    const [loading, setLoading] = useState<boolean>(false);
 
-    // const [messages, setMessages] = useState<Message[]>([]);
+    const [message, setMessage] = useState<Message | null>(null);
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -124,7 +124,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const reset = () => {
         setContents({ data: new Blob(), contentType: "text/plain", filename: null });
-        // setMessages([]);
+        setMessage(null);
     };
 
     const setText = (x: string) => {
@@ -138,6 +138,7 @@ export default function Page({ params }: Props): React.ReactNode {
     const setFile = (file: File) => {
         if (file.size > 10 * 1024 * 1024) { return; }
 
+        setMessage({ type: MessageType.INFO, text: `Uploading ${file.name}` });
         setLoading(true);
 
         const reader = new FileReader();
@@ -158,7 +159,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
         reader.readAsArrayBuffer(file);
     };
-    
+
     const copy = async () => {
         try {
             await navigator.clipboard.write([
@@ -167,16 +168,9 @@ export default function Page({ params }: Props): React.ReactNode {
                 })
             ]);
 
-            // setMessages(msgs => [
-            //     { type: MessageType.INFO, text: "Contents Copied" },
-            //     ...msgs
-            // ]);
+            setMessage({ type: MessageType.INFO, text: "Contents Copied" });
         } catch (e) {
-            console.log(e);
-            // setMessages(msgs => [
-            //     { type: MessageType.ERROR, text: "ERROR: Copy Failed" },
-            //     ...msgs
-            // ]);
+            setMessage({ type: MessageType.ERROR, text: "Copy Failed" });
         }
     };
 
@@ -251,8 +245,12 @@ export default function Page({ params }: Props): React.ReactNode {
         const downloader = downloaderRef.current;
         if (!downloader || plainText) { return; }
 
+        const name = contents.filename || "file";
+
+        setMessage({ type: MessageType.INFO, text: `Downloading ${name}` });
+
         downloader.href = URL.createObjectURL(contents.data);
-        downloader.download = contents.filename || "file";
+        downloader.download = name;
         downloader.click();
     };
 
@@ -292,7 +290,7 @@ export default function Page({ params }: Props): React.ReactNode {
                     { loading && <ClipLoader /> }
                 </div>
                 <div className={ styles["message-box"] }>
-                    {/* <MessageBox messages={ messages } /> */}
+                    <MessageBox message={ message } />
                 </div>
             </div>
             <div className={ styles.preview } >
