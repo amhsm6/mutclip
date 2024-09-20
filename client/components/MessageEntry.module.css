@@ -4,10 +4,16 @@
     border-radius: 10px;
     font-size: 1.2rem;
     transition: all 0.3s;
-    animation: appear 0.3s;
+    animation: appear-left 0.3s;
 }
 
-@keyframes appear {
+@media screen and (min-width: 45rem) and (max-width: 60rem) {
+    .message {
+        animation: appear-right 0.3s;
+    }
+}
+
+@keyframes appear-left {
     from {
         transform: translateX(-100px);
     }
@@ -15,6 +21,20 @@
     to {
         transform: translateX(0px);
     }
+}
+
+@keyframes appear-right {
+    from {
+        transform: translateX(100px);
+    }
+
+    to {
+        transform: translateX(0px);
+    }
+}
+
+.success {
+    background: rgb(45, 218, 14);
 }
 
 .info {

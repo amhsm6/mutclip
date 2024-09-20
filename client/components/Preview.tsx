@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import type { Contents } from "@/types/clip";
 import styles from "./Preview.module.css";
 

@@ -5,11 +5,18 @@
     justify-content: center;
 }
 
-.input {
+.main {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    top: 0px;
+    left: 0px;
+    display: flex;
+    flex-direction: column;
+}
+
+.input {
     width: 25rem;
+    margin-top: 20px;
+    margin-left: 20px;
     display: flex;
     flex-direction: column;
 }
@@ -36,6 +43,7 @@
 }
 
 .reset {
+    padding-top: 5px;
     border: 2px dashed black;
     border-radius: 5px;
 }
@@ -60,7 +68,8 @@
 }
 
 .message-box {
-    margin-top: 30px;
+    margin-top: 20px;
+    margin-left: 20px;
 }
 
 .preview {
@@ -70,10 +79,8 @@
 }
 
 @media screen and (max-width: 87rem) {
-    .input {
+    .main {
         position: static;
-        margin-top: 20px;
-        margin-left: 20px;
     }
 
     .preview {
@@ -89,8 +96,16 @@
         align-items: center;
     }
 
-    .input {
+    .main {
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+
+    .message-box {
+        margin-top: 20px;
         margin-left: 0px;
+        margin-right: 20px;
     }
 
     .preview {
@@ -103,9 +118,35 @@
     }
 }
 
+@media screen and (max-width: 45rem) {
+    .main {
+        width: auto;
+        align-self: flex-start;
+        flex-direction: column;
+    }
+
+    .message-box {
+        height: 10rem;
+        margin-right: 0px;
+        margin-left: 20px;
+    }
+}
+
 @media screen and (max-width: 30rem) {
-    .input {
+    .main {
         width: 80%;
+        align-self: center;
+        flex-direction: column;
+    }
+
+    .input {
+        width: auto;
+        margin-left: 0px;
+    }
+
+    .message-box {
+        height: 10rem;
+        margin-left: 0px;
     }
 
     .controls {

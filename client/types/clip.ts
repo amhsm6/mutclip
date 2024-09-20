@@ -10,6 +10,7 @@ export type Message = {
 };
 
 export enum MessageType {
+    SUCCESS,
     INFO,
     ERROR
 };

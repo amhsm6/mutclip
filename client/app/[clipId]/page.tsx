@@ -7,7 +7,7 @@ import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
 import { Contents, Message, MessageType } from "@/types/clip";
 import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
-import { FaRegCopy, FaPaste } from "react-icons/fa";
+import { FaRegCopy } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
 
@@ -55,6 +55,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const [renderedContents, setRenderedContents] = useState<string>("");
 
+    const [starting, setStarting] = useState<boolean>(true);
     const [loading, setLoading] = useState<boolean>(false);
 
     const [message, setMessage] = useState<Message | null>(null);
@@ -65,7 +66,14 @@ export default function Page({ params }: Props): React.ReactNode {
     const downloaderRef = useRef<HTMLAnchorElement>(null);
 
     useEffect(() => {
+        setMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
+
         const ws = new WebSocket(process.env.NODE_ENV === "production" ? `/api/ws/${params.clipId}` : `${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
+
+        ws.onopen = () => {
+            setStarting(false);
+            setMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
+        };
 
         ws.onmessage = async (msg: MessageEvent<Blob | string>) => {
             const buf = msg.data;
@@ -73,7 +81,7 @@ export default function Page({ params }: Props): React.ReactNode {
             if (typeof buf === "string") {
                 switch (buf) {
                     case 'A':
-                        setLoading(true)
+                        setLoading(true);
                         break;
                     
                     case 'S':
@@ -136,7 +144,10 @@ export default function Page({ params }: Props): React.ReactNode {
     };
 
     const setFile = (file: File) => {
-        if (file.size > 10 * 1024 * 1024) { return; }
+        if (file.size > 10 * 1024 * 1024) {
+            setMessage({ type: MessageType.ERROR, text: "Maximum file size is 10 MB" });
+            return;
+        }
 
         setMessage({ type: MessageType.INFO, text: `Uploading ${file.name}` });
         setLoading(true);
@@ -256,38 +267,40 @@ export default function Page({ params }: Props): React.ReactNode {
 
     return (
         <div className={ styles.content }>
-            <div className={ styles.input }>
-                <textarea
-                    ref={ inputRef }
-                    value={ renderedContents }
-                    onChange={ e => setText(e.target.value) }
-                    disabled={ !plainText }
-                    autoFocus
-                    rows={ 10 }
-                />
-                <div className={ styles["bottom-row"] }>
-                    <div className={ styles.controls }>
-                        <ControlButton className={ styles.reset } onClick={ reset }>
-                            <FaRegTrashCan />
-                        </ControlButton>
-                        <ControlButton className={ styles.copy } onClick={ copy }>
-                            <FaRegCopy />
-                        </ControlButton>
-                        <ControlButton className={ styles.upload } onClick={ initiateUpload }>
-                            <FaUpload />
-                            <input
-                                ref={ uploaderRef }
-                                type="file"
-                                onChange={ upload }
-                                style={{ display: "none" }}
-                            />
-                        </ControlButton>
-                        <ControlButton className={ styles.download } onClick={ download }>
-                            <FaDownload />
-                            <a ref={ downloaderRef } style={{ display: "none" }}></a>
-                        </ControlButton>
+            <div className={ styles.main }>
+                <div className={ styles.input }>
+                    <textarea
+                        ref={ inputRef }
+                        value={ renderedContents }
+                        onChange={ e => setText(e.target.value) }
+                        disabled={ !plainText || starting }
+                        autoFocus
+                        rows={ 10 }
+                    />
+                    <div className={ styles["bottom-row"] }>
+                        <div className={ styles.controls }>
+                            <ControlButton className={ styles.reset } onClick={ reset }>
+                                <FaRegTrashCan />
+                            </ControlButton>
+                            <ControlButton className={ styles.copy } onClick={ copy }>
+                                <FaRegCopy />
+                            </ControlButton>
+                            <ControlButton className={ styles.upload } onClick={ initiateUpload }>
+                                <FaUpload />
+                                <input
+                                    ref={ uploaderRef }
+                                    type="file"
+                                    onChange={ upload }
+                                    style={{ display: "none" }}
+                                />
+                            </ControlButton>
+                            <ControlButton className={ styles.download } onClick={ download }>
+                                <FaDownload />
+                                <a ref={ downloaderRef } style={{ display: "none" }}></a>
+                            </ControlButton>
+                        </div>
+                        { (loading || starting) && <ClipLoader /> }
                     </div>
-                    { loading && <ClipLoader /> }
                 </div>
                 <div className={ styles["message-box"] }>
                     <MessageBox message={ message } />

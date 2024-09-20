@@ -9,10 +9,18 @@ export type EntryProps = {
     animation: number
 };
 
+const remToPx = (rem: number) => rem * parseFloat(getComputedStyle(document.documentElement).fontSize);
+
 export default function MessageEntry({ message, animation }: EntryProps): React.ReactNode {
+    const DIRECTION = screen.width > remToPx(45) && screen.width < remToPx(60) ? 1 : -1;
+
     let typeclass = "";
 
     switch (message.type) {
+        case MessageType.SUCCESS:
+            typeclass = styles.success;
+            break;
+
         case MessageType.INFO:
             typeclass = styles.info;
             break;
@@ -36,7 +44,7 @@ export default function MessageEntry({ message, animation }: EntryProps): React.
     }, [animation]);
 
     return (
-        <div className={ `${styles.message} ${typeclass}` } style={{ transform: `translate(${die ? -500 : 0}px, ${dy}px)` }}>
+        <div className={ `${styles.message} ${typeclass}` } style={{ transform: `translate(${die ? 500 * DIRECTION : 0}px, ${dy}px)` }}>
             <span>{ message.text }</span>
         </div>
     );
