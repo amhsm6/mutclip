@@ -1,5 +1,5 @@
 # Mutual Clipboard
 
-A service that allows fast and extremely unsafe data transfer. Entering index page generates new clipboard, into which you can type in, paste and upload text or files. If another client connects to the same clipboard (using the same url) then the contents become synchronized across all clients.
+This service facilitates rapid, yet highly unsecure data transfer. Upon accessing the homepage, a new clipboard is created where users can input, paste, or upload text and files. When another client connects to the same clipboard via the shared URL, all content is automatically synchronized across connected users.
 
-Check it out: [https://35.208.153.60](https://35.208.153.60)
+Explore it here: [https://35.208.153.60](https://35.208.153.60)
