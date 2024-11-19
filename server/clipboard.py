@@ -8,7 +8,7 @@ clients = {}
 
 class Clipboard:
     def __init__(self):
-        self.contents = None
+        self.contents = ''
         self.clients = []
     
 def generate_id():

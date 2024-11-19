@@ -10,11 +10,12 @@
     "extract": "cp -r .next/standalone dist && cp -r .next/static dist/.next && tar czvf dist.tar.gz dist && rm -rf dist"
   },
   "dependencies": {
-    "next": "14.2.7",
+    "next": "^15.0.3",
     "react": "^18",
     "react-dom": "^18",
     "react-icons": "^5.3.0",
-    "react-spinners": "^0.14.1"
+    "react-spinners": "^0.14.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/node": "^20",

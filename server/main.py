@@ -3,11 +3,7 @@ from flask_socketio import SocketIO
 from clipboard import Clipboard, generate_id, state_lock, clipboards, clients
 
 app = Flask(__name__)
-sock = SocketIO(app)
-
-@app.route('/')
-def index():
-    return '<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js" integrity="sha512-aMGMvNYu8Ue4G+fHa359jcPb1u+ytAF+P2SCb+PxrjCdO3n3ZTxJ30zuH39rimUggmTwmh2u7wvQsDTHESnmfQ==" crossorigin="anonymous"></script>'
+sock = SocketIO(app, cors_allowed_origins='*')
 
 @app.route('/newclip')
 def newclip():
@@ -16,26 +12,35 @@ def newclip():
     with state_lock:
         clipboards[id] = Clipboard()
 
+    app.logger.warning('[Generate]: %s', id)
+
     return id
 
 @sock.on('connect')
 def handle_connect(auth):
-    clipboard_id = auth
+    clipboard_id = auth['clip_id']
     sid = request.sid
 
-    with state_lock:
-        if clipboard_id in clipboards:
-            clipboards[clipboard_id].clients.append(sid)
-            clients[sid] = clipboard_id
+    app.logger.warning('[Connect] %s to %s', sid, clipboard_id)
 
-            sock.emit('tx', to=sid)
-            sock.send(clipboards[clipboard_id].contents, to=sid)
-        else:
+    with state_lock:
+        if clipboard_id not in clipboards:
             sock.emit('noclipboard', to=sid)
+            return
+
+        clipboards[clipboard_id].clients.append(sid)
+        clients[sid] = clipboard_id
+
+        sock.emit('tx', to=sid)
+        sock.send(clipboards[clipboard_id].contents, to=sid)
+
+        app.logger.warning('[Send] %s -> %s', clipboards[clipboard_id].contents, sid)
 
 @sock.on('message')
 def handle_message(data):
     sid = request.sid
+
+    app.logger.warning('[Recv] %s <- %s', data, sid)
 
     with state_lock:
         if sid not in clients:
@@ -48,8 +53,7 @@ def handle_message(data):
 
         sock.emit('tx', to=clipboards[clipboard_id].clients, skip_sid=sid)
         sock.send(data, to=clipboards[clipboard_id].clients, skip_sid=sid)
+        app.logger.warning('[Send] %s -> many', clipboards[clipboard_id].contents)
 
         sock.emit('syn', to=sid)
-
-if __name__ == '__main__':
-    sock.run(app, '0.0.0.0', 1509)
+        app.logger.warning('[Syn] %s', sid)

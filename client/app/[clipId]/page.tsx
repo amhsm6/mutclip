@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useContext, useRef } from "react";
+import React, { use, useState, useEffect, useContext, useRef } from "react";
 import BodyRefContext from "@/contexts/BodyRefContext";
 import ControlButton from "@/components/ControlButton";
 import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
 import { Contents, Message, MessageType } from "@/types/clip";
 import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
+import { io, Socket } from "socket.io-client"
 import { FaRegCopy } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
@@ -38,13 +39,13 @@ const decode = async (buf: Blob): Promise<Contents> => {
 const toBinaryString = (buf: Uint8Array): string => buf.reduce((acc, x) => acc + String.fromCharCode(x), "");
 
 type Props = {
-    params: {
-        clipId: number
-    }
+    params: Promise<{ clipId: string }>
 };
 
 export default function Page({ params }: Props): React.ReactNode {
-    const [conn, setConn] = useState<WebSocket | null>(null);
+    const clipId = use(params).clipId;
+
+    const [conn, setConn] = useState<Socket | null>(null);
 
     const [contents, setContents] = useState<Contents & { incoming?: boolean }>({
         data: new Blob(),
@@ -68,44 +69,43 @@ export default function Page({ params }: Props): React.ReactNode {
     useEffect(() => {
         setMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
 
-        const ws = new WebSocket(process.env.NODE_ENV === "production" ? `/api/ws/${params.clipId}` : `${process.env.NEXT_PUBLIC_API_URL_WS}/ws/${params.clipId}`);
+        const opts = { "auth": { "clip_id": clipId } };
+        const socket = process.env.NODE_ENV === "production" ? io(opts) : io(process.env.NEXT_PUBLIC_API_URL, opts);
 
-        ws.onopen = () => {
+        socket.on("connect", () => {
             setStarting(false);
             setMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
-        };
+        });
 
-        ws.onmessage = async (msg: MessageEvent<Blob | string>) => {
-            const buf = msg.data;
+        socket.on("tx", () => {
+            setLoading(true);
+        });
 
-            if (typeof buf === "string") {
-                switch (buf) {
-                    case 'A':
-                        setLoading(true);
-                        break;
-                    
-                    case 'S':
-                        setLoading(false)
-                        break;
-                    
-                    default:
-                }
-            } else {
-                const decoded = await decode(buf);
-                setContents({ ...decoded, incoming: true });
-            }
-        };
+        socket.on("syn", () => {
+            setLoading(false);
+        });
 
-        setConn(ws);
+        socket.on("message", async (data: string) => {
+            const decoded = await decode(new Blob([data]));
+            setContents({ ...decoded, incoming: true });
+        });
+        
+        socket.on("noclipboard", () => {
+            setMessage({ type: MessageType.ERROR, text: "This clipboard does not exist" });
+            socket.disconnect();
+            setConn(null);
+        });
+
+        setConn(socket);
 
         return () => {
-            ws.close();
+            socket.disconnect();
             setConn(null);
         };
     }, []);
 
     useEffect(() => {
-        if (!conn || conn.readyState !== WebSocket.OPEN || contents.incoming) { return () => {}; }
+        if (!conn || !conn.connected || contents.incoming) { return () => {}; }
 
         const timeout = setTimeout(() => {
             setLoading(true);
