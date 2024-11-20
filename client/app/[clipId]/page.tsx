@@ -59,7 +59,8 @@ export default function Page({ params }: Props): React.ReactNode {
     const [starting, setStarting] = useState<boolean>(true);
     const [loading, setLoading] = useState<boolean>(false);
 
-    const [message, setMessage] = useState<Message | null>(null);
+    const [messageQueue, setMessageQueue] = useState<Message[]>([]);
+    const pushMessage = (msg: Message) => setMessageQueue(msgs => [ ...msgs, msg ]);
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -67,14 +68,14 @@ export default function Page({ params }: Props): React.ReactNode {
     const downloaderRef = useRef<HTMLAnchorElement>(null);
 
     useEffect(() => {
-        setMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
+        pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
 
         const opts = { "auth": { "clip_id": clipId } };
         const socket = process.env.NODE_ENV === "production" ? io(opts) : io(process.env.NEXT_PUBLIC_API_URL, opts);
 
         socket.on("connect", () => {
             setStarting(false);
-            setMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
+            pushMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
         });
 
         socket.on("tx", () => {
@@ -91,9 +92,11 @@ export default function Page({ params }: Props): React.ReactNode {
         });
         
         socket.on("noclipboard", () => {
-            setMessage({ type: MessageType.ERROR, text: "This clipboard does not exist" });
+            pushMessage({ type: MessageType.ERROR, text: "This clipboard does not exist" });
             socket.disconnect();
             setConn(null);
+            // TODO: Do something if the clipboard does not exist
+            // FIXME: 'Server connected' message shows up after
         });
 
         setConn(socket);
@@ -105,7 +108,7 @@ export default function Page({ params }: Props): React.ReactNode {
     }, []);
 
     useEffect(() => {
-        if (!conn || !conn.connected || contents.incoming) { return () => {}; }
+        if (!conn || !conn.connected || contents.incoming) { return; }
 
         const timeout = setTimeout(() => {
             setLoading(true);
@@ -132,7 +135,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const reset = () => {
         setContents({ data: new Blob(), contentType: "text/plain", filename: null });
-        setMessage(null);
+        setMessageQueue([]);
     };
 
     const setText = (x: string) => {
@@ -145,11 +148,11 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const setFile = (file: File) => {
         if (file.size > 10 * 1024 * 1024) {
-            setMessage({ type: MessageType.ERROR, text: "Maximum file size is 10 MB" });
+            pushMessage({ type: MessageType.ERROR, text: "Maximum file size is 10 MB" });
             return;
         }
 
-        setMessage({ type: MessageType.INFO, text: `Uploading ${file.name}` });
+        pushMessage({ type: MessageType.INFO, text: `Uploading ${file.name}` });
         setLoading(true);
 
         const reader = new FileReader();
@@ -179,9 +182,9 @@ export default function Page({ params }: Props): React.ReactNode {
                 })
             ]);
 
-            setMessage({ type: MessageType.INFO, text: "Contents Copied" });
+            pushMessage({ type: MessageType.INFO, text: "Contents Copied" });
         } catch (e) {
-            setMessage({ type: MessageType.ERROR, text: "Copy Failed" });
+            pushMessage({ type: MessageType.ERROR, text: "Copy Failed" });
         }
     };
 
@@ -216,7 +219,7 @@ export default function Page({ params }: Props): React.ReactNode {
         const body = bodyRef.current;
         const input = inputRef.current;
 
-        if (!body || !input) { return () => {}; }
+        if (!body || !input) { return; }
 
         body.oncopy = copy;
         body.onpaste = paste;
@@ -258,7 +261,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
         const name = contents.filename || "file";
 
-        setMessage({ type: MessageType.INFO, text: `Downloading ${name}` });
+        pushMessage({ type: MessageType.INFO, text: `Downloading ${name}` });
 
         downloader.href = URL.createObjectURL(contents.data);
         downloader.download = name;
@@ -303,7 +306,7 @@ export default function Page({ params }: Props): React.ReactNode {
                     </div>
                 </div>
                 <div className={ styles["message-box"] }>
-                    <MessageBox message={ message } />
+                    <MessageBox messageQueue={ messageQueue } />
                 </div>
             </div>
             <div className={ styles.preview } >

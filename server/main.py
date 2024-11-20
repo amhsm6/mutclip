@@ -1,18 +1,20 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
-from clipboard import Clipboard, generate_id, state_lock, clipboards, clients
+from clipboard import Clipboard, generate_id, start_cleanup
 
 app = Flask(__name__)
 sock = SocketIO(app, cors_allowed_origins='*')
+
+start_cleanup()
 
 @app.route('/newclip')
 def newclip():
     id = generate_id()
 
-    with state_lock:
-        clipboards[id] = Clipboard()
+    with Clipboard.lock:
+        Clipboard.clips[id] = Clipboard()
 
-    app.logger.warning('[Generate]: %s', id)
+    print('[Generate] %s' % id)
 
     return id
 
@@ -21,39 +23,56 @@ def handle_connect(auth):
     clipboard_id = auth['clip_id']
     sid = request.sid
 
-    app.logger.warning('[Connect] %s to %s', sid, clipboard_id)
+    print('[Connect] %s to %s' % (sid, clipboard_id))
 
-    with state_lock:
-        if clipboard_id not in clipboards:
+    with Clipboard.lock:
+        if clipboard_id not in Clipboard.clips:
+            print('[ERROR] No such clipboard')
             sock.emit('noclipboard', to=sid)
             return
 
-        clipboards[clipboard_id].clients.append(sid)
-        clients[sid] = clipboard_id
+        Clipboard.clips[clipboard_id].clients.append(sid)
+        Clipboard.clients[sid] = clipboard_id
 
         sock.emit('tx', to=sid)
-        sock.send(clipboards[clipboard_id].contents, to=sid)
+        sock.send(Clipboard.clips[clipboard_id].contents, to=sid)
 
-        app.logger.warning('[Send] %s -> %s', clipboards[clipboard_id].contents, sid)
+        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents, sid))
+
+@sock.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+
+    print('[Disconnect] %s' % sid)
+
+    with Clipboard.lock:
+        if sid not in Clipboard.clients:
+            sock.emit('error', to=sid)
+            return
+
+        clipboard_id = Clipboard.clients[sid]
+
+        Clipboard.clips[clipboard_id].clients.remove(sid) # FIXME: use set
+        del Clipboard.clients[sid]
 
 @sock.on('message')
 def handle_message(data):
     sid = request.sid
 
-    app.logger.warning('[Recv] %s <- %s', data, sid)
+    print('[Recv] %s <- %s' % (data, sid))
 
-    with state_lock:
-        if sid not in clients:
+    with Clipboard.lock:
+        if sid not in Clipboard.clients:
             sock.emit('error', to=sid)
             return
 
-        clipboard_id = clients[sid]
+        clipboard_id = Clipboard.clients[sid]
 
-        clipboards[clipboard_id].contents = data
+        Clipboard.clips[clipboard_id].contents = data
 
-        sock.emit('tx', to=clipboards[clipboard_id].clients, skip_sid=sid)
-        sock.send(data, to=clipboards[clipboard_id].clients, skip_sid=sid)
-        app.logger.warning('[Send] %s -> many', clipboards[clipboard_id].contents)
+        sock.emit('tx', to=Clipboard.clips[clipboard_id].clients, skip_sid=sid)
+        sock.send(data, to=Clipboard.clips[clipboard_id].clients, skip_sid=sid)
+        print('[Send] %s -> many' % Clipboard.clips[clipboard_id].contents)
 
         sock.emit('syn', to=sid)
-        app.logger.warning('[Syn] %s', sid)
+        print('[Syn] %s' % sid)
