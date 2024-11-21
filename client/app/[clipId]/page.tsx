@@ -7,7 +7,8 @@ import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
 import { Contents, Message, MessageType } from "@/types/clip";
 import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
-import { io, Socket } from "socket.io-client"
+import { io, Socket } from "socket.io-client";
+import ClipboardJS from "clipboard";
 import { FaRegCopy } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
@@ -45,7 +46,8 @@ type Props = {
 export default function Page({ params }: Props): React.ReactNode {
     const clipId = use(params).clipId;
 
-    const [conn, setConn] = useState<Socket | null>(null);
+    const connRef = useRef<Socket | null>(null);
+    const clipboardRef = useRef<ClipboardJS | null>(null);
 
     const [contents, setContents] = useState<Contents & { incoming?: boolean }>({
         data: new Blob(),
@@ -94,20 +96,31 @@ export default function Page({ params }: Props): React.ReactNode {
         socket.on("noclipboard", () => {
             pushMessage({ type: MessageType.ERROR, text: "This clipboard does not exist" });
             socket.disconnect();
-            setConn(null);
+            connRef.current = null;
             // TODO: Do something if the clipboard does not exist
             // FIXME: 'Server connected' message shows up after
         });
 
-        setConn(socket);
+        connRef.current = socket;
 
         return () => {
             socket.disconnect();
-            setConn(null);
+            connRef.current = null;
         };
     }, []);
 
     useEffect(() => {
+        if (!inputRef.current) { return; }
+        clipboardRef.current = new ClipboardJS(inputRef.current);
+
+        clipboardRef.current.on('success', e => { console.log('123'); e.clearSelection(); });
+
+        return () => clipboardRef.current?.destroy();
+    }, []);
+
+    useEffect(() => {
+        const conn = connRef.current;
+
         if (!conn || !conn.connected || contents.incoming) { return; }
 
         const timeout = setTimeout(() => {
@@ -147,8 +160,8 @@ export default function Page({ params }: Props): React.ReactNode {
     };
 
     const setFile = (file: File) => {
-        if (file.size > 10 * 1024 * 1024) {
-            pushMessage({ type: MessageType.ERROR, text: "Maximum file size is 10 MB" });
+        if (file.size > 50 * 1024 * 1024) {
+            pushMessage({ type: MessageType.ERROR, text: "Maximum file size is 50 MB" });
             return;
         }
 
@@ -158,9 +171,8 @@ export default function Page({ params }: Props): React.ReactNode {
         const reader = new FileReader();
 
         reader.onload = e => {
-            if (!e.target) { return; }
-            const res = e.target.result;
-            if (!(res instanceof ArrayBuffer)) { return; }
+            const res = e.target?.result;
+            if (!res || !(res instanceof ArrayBuffer)) { return; }
 
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
 
@@ -174,25 +186,14 @@ export default function Page({ params }: Props): React.ReactNode {
         reader.readAsArrayBuffer(file);
     };
 
-    const copy = async () => {
-        try {
-            await navigator.clipboard.write([
-                new ClipboardItem({
-                    [contents.contentType]: contents.data
-                })
-            ]);
-
-            pushMessage({ type: MessageType.INFO, text: "Contents Copied" });
-        } catch (e) {
-            pushMessage({ type: MessageType.ERROR, text: "Copy Failed" });
-        }
+    const copy = () => {
+        if (!inputRef.current) { return; }
+        ClipboardJS.copy(inputRef.current);
     };
 
     const paste = (e: ClipboardEvent) => {
-        if (!e.clipboardData) { return; }
-
-        const items = e.clipboardData.items;
-        if (items.length !== 1) { return; }
+        const items = e.clipboardData?.items;
+        if (!items || items.length !== 1) { return; }
         const item = items[0];
 
         switch (item.kind) {
@@ -221,9 +222,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
         if (!body || !input) { return; }
 
-        body.oncopy = copy;
         body.onpaste = paste;
-
         body.onkeydown = e => {
             if (e.key === "Escape") { reset(); }
 
@@ -234,18 +233,12 @@ export default function Page({ params }: Props): React.ReactNode {
         };
 
         return () => {
-            body.oncopy = null;
             body.onpaste = null;
             body.onkeydown = null;
         };
-    }, [conn, contents.data, contents.contentType, contents.filename]);
+    }, [contents.data, contents.contentType, contents.filename]);
 
-    const initiateUpload = () => {
-        const uploader = uploaderRef.current;
-        if (!uploader) { return; }
-
-        uploader.click();
-    };
+    const initiateUpload = () => uploaderRef.current?.click();
 
     const upload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;

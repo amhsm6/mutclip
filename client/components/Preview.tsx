@@ -4,7 +4,7 @@ import React from "react";
 import type { Contents } from "@/types/clip";
 import styles from "./Preview.module.css";
 
-const previewTypes: string[] = [ "image/gif", "image/png", "image/jpeg" ];
+const previewTypes: string[] = ["image/gif", "image/png", "image/jpeg"];
 
 type Props = { contents: Contents };
 

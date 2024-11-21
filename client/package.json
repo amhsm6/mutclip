@@ -10,6 +10,7 @@
     "extract": "cp -r .next/standalone dist && cp -r .next/static dist/.next && tar czvf dist.tar.gz dist && rm -rf dist"
   },
   "dependencies": {
+    "clipboard": "^2.0.11",
     "next": "^15.0.3",
     "react": "^18",
     "react-dom": "^18",
