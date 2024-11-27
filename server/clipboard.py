@@ -31,4 +31,5 @@ def cleanup():
 
 def start_cleanup():
     t = Thread(target=cleanup)
+    t.daemon = True
     t.start()
