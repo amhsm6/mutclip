@@ -1,5 +1,6 @@
 import React from "react";
 import { BodyRefProvider } from "@/contexts/BodyRefContext";
+import { MessageQueueProvider } from "@/contexts/MessageQueueContext";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -13,7 +14,11 @@ type Props = { children: React.ReactNode };
 export default function RootLayout({ children }: Props): React.ReactNode {
     return (
         <html lang="en">
-            <BodyRefProvider>{ children }</BodyRefProvider>
+            <BodyRefProvider>
+                <MessageQueueProvider>
+                    { children }
+                </MessageQueueProvider>
+            </BodyRefProvider>
         </html>
     );
 }

@@ -2,10 +2,11 @@
 
 import React, { use, useState, useEffect, useContext, useRef } from "react";
 import BodyRefContext from "@/contexts/BodyRefContext";
+import MessageQueueContext from "@/contexts/MessageQueueContext";
 import ControlButton from "@/components/ControlButton";
 import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
-import { Contents, Message, MessageType } from "@/types/clip";
+import { Contents, MessageType } from "@/types/clip";
 import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
 import { io, Socket } from "socket.io-client";
 import ClipboardJS from "clipboard";
@@ -61,8 +62,7 @@ export default function Page({ params }: Props): React.ReactNode {
     const [starting, setStarting] = useState<boolean>(true);
     const [loading, setLoading] = useState<boolean>(false);
 
-    const [messageQueue, setMessageQueue] = useState<Message[]>([]);
-    const pushMessage = (msg: Message) => setMessageQueue(msgs => [ ...msgs, msg ]);
+    const { pushMessage } = useContext(MessageQueueContext);
 
     const bodyRef = useContext(BodyRefContext);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -84,7 +84,7 @@ export default function Page({ params }: Props): React.ReactNode {
             setLoading(true);
         });
 
-        socket.on("syn", () => {
+        socket.on("sync", () => {
             setLoading(false);
         });
 
@@ -107,15 +107,6 @@ export default function Page({ params }: Props): React.ReactNode {
             socket.disconnect();
             connRef.current = null;
         };
-    }, []);
-
-    useEffect(() => {
-        if (!inputRef.current) { return; }
-        clipboardRef.current = new ClipboardJS(inputRef.current);
-
-        clipboardRef.current.on('success', e => { console.log('123'); e.clearSelection(); });
-
-        return () => clipboardRef.current?.destroy();
     }, []);
 
     useEffect(() => {
@@ -148,7 +139,7 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const reset = () => {
         setContents({ data: new Blob(), contentType: "text/plain", filename: null });
-        setMessageQueue([]);
+        // TODO: implement clearing queue
     };
 
     const setText = (x: string) => {
@@ -189,6 +180,7 @@ export default function Page({ params }: Props): React.ReactNode {
     const copy = () => {
         if (!inputRef.current) { return; }
         ClipboardJS.copy(inputRef.current);
+        // FIXME: clipboard a bit wanky
     };
 
     const paste = (e: ClipboardEvent) => {
@@ -283,25 +275,27 @@ export default function Page({ params }: Props): React.ReactNode {
                             </ControlButton>
                             <ControlButton className={ styles.upload } onClick={ initiateUpload }>
                                 <FaUpload />
-                                <input
-                                    ref={ uploaderRef }
-                                    type="file"
-                                    onChange={ upload }
-                                    style={{ display: "none" }}
-                                />
                             </ControlButton>
                             <ControlButton className={ styles.download } onClick={ download }>
                                 <FaDownload />
-                                <a ref={ downloaderRef } style={{ display: "none" }}></a>
                             </ControlButton>
                         </div>
                         { (loading || starting) && <ClipLoader /> }
                     </div>
+
+                    <input
+                        ref={ uploaderRef }
+                        type="file"
+                        onChange={ upload }
+                        style={{ display: "none" }}
+                    />
+                    <a ref={ downloaderRef } style={{ display: "none" }}></a>
                 </div>
                 <div className={ styles["message-box"] }>
-                    <MessageBox messageQueue={ messageQueue } />
+                    <MessageBox />
                 </div>
             </div>
+
             <div className={ styles.preview } >
                 <Preview contents={ contents } />
             </div>

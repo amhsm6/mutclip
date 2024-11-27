@@ -21,8 +21,8 @@ def generate_id():
 def cleanup():
     while True:
         with Clipboard.lock:
-            empty_ids = list(map(lambda item: item[0], filter(lambda item: not item[1].clients, Clipboard.clips.items())))
-            for id in empty_ids:
+            empty = list(filter(lambda item: not item[1].clients, Clipboard.clips.items()))
+            for id, _ in empty:
                 print(f'Clean {id}')
                 del Clipboard.clips[id]
 
