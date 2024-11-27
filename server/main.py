@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from clipboard import Clipboard, generate_id, start_cleanup
 
 app = Flask(__name__)
-sock = SocketIO(app, cors_allowed_origins='*', max_http_buffer_size=1e8)
+socket = SocketIO(app, cors_allowed_origins='*', max_http_buffer_size=1e8)
 
 start_cleanup()
 
@@ -18,7 +18,7 @@ def newclip():
 
     return id
 
-@sock.on('connect')
+@socket.on('connect')
 def handle_connect(auth):
     clipboard_id = auth['clip_id']
     sid = request.sid
@@ -28,18 +28,18 @@ def handle_connect(auth):
     with Clipboard.lock:
         if clipboard_id not in Clipboard.clips:
             print('[ERROR] No such clipboard')
-            sock.emit('noclipboard', to=sid)
+            socket.emit('noclipboard', to=sid)
             return
 
         Clipboard.clips[clipboard_id].clients.append(sid)
         Clipboard.clients[sid] = clipboard_id
 
-        sock.emit('tx', to=sid)
-        sock.send(Clipboard.clips[clipboard_id].contents, to=sid)
+        socket.emit('tx', to=sid)
+        socket.send(Clipboard.clips[clipboard_id].contents, to=sid)
 
         print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50] or '*empty*', sid))
 
-@sock.on('disconnect')
+@socket.on('disconnect')
 def handle_disconnect():
     sid = request.sid
 
@@ -47,7 +47,7 @@ def handle_disconnect():
 
     with Clipboard.lock:
         if sid not in Clipboard.clients:
-            sock.emit('error', to=sid)
+            socket.emit('error', to=sid)
             return
 
         clipboard_id = Clipboard.clients[sid]
@@ -55,7 +55,7 @@ def handle_disconnect():
         Clipboard.clips[clipboard_id].clients.remove(sid) # FIXME: use set
         del Clipboard.clients[sid]
 
-@sock.on('message')
+@socket.on('message')
 def handle_message(data):
     sid = request.sid
 
@@ -63,7 +63,7 @@ def handle_message(data):
 
     with Clipboard.lock:
         if sid not in Clipboard.clients:
-            sock.emit('error', to=sid)
+            socket.emit('error', to=sid)
             return
 
         clipboard_id = Clipboard.clients[sid]
@@ -71,9 +71,9 @@ def handle_message(data):
         Clipboard.clips[clipboard_id].contents = data
 
         others = list(filter(lambda id: id != sid, Clipboard.clips[clipboard_id].clients))
-        sock.emit('tx', to=others)
-        sock.send(data, to=others)
+        socket.emit('tx', to=others)
+        socket.send(data, to=others)
         print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50], ', '.join(others) or '*no one*'))
 
-        sock.emit('sync', to=sid)
+        socket.emit('sync', to=sid)
         print('[Sync] %s' % sid)
