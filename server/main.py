@@ -14,7 +14,7 @@ def newclip():
     with Clipboard.lock:
         Clipboard.clips[id] = Clipboard()
 
-    print(f'[Generate] {id}')
+    print(f'[Generate] {id}', flush=True)
 
     return id
 
@@ -23,11 +23,11 @@ def handle_connect(auth):
     clipboard_id = auth['clip_id']
     sid = request.sid
 
-    print('[Connect] %s -> %s' % (sid, clipboard_id))
+    print('[Connect] %s -> %s' % (sid, clipboard_id), flush=True)
 
     with Clipboard.lock:
         if clipboard_id not in Clipboard.clips:
-            print('[ERROR] No such clipboard')
+            print('[ERROR] No such clipboard', flush=True)
             socket.emit('noclipboard', to=sid)
             return
 
@@ -37,13 +37,13 @@ def handle_connect(auth):
         socket.emit('tx', to=sid)
         socket.send(Clipboard.clips[clipboard_id].contents, to=sid)
 
-        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50] or '*empty*', sid))
+        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50] or '*empty*', sid), flush=True)
 
 @socket.on('disconnect')
 def handle_disconnect():
     sid = request.sid
 
-    print(f'[Disconnect] {sid}')
+    print(f'[Disconnect] {sid}', flush=True)
 
     with Clipboard.lock:
         if sid not in Clipboard.clients:
@@ -59,7 +59,7 @@ def handle_disconnect():
 def handle_message(data):
     sid = request.sid
 
-    print('[Recv] %s <- %s' % (data[:50] or '*empty*', sid))
+    print('[Recv] %s <- %s' % (data[:50] or '*empty*', sid), flush=True)
 
     with Clipboard.lock:
         if sid not in Clipboard.clients:
@@ -73,7 +73,7 @@ def handle_message(data):
         others = list(filter(lambda id: id != sid, Clipboard.clips[clipboard_id].clients))
         socket.emit('tx', to=others)
         socket.send(data, to=others)
-        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50], ', '.join(others) or '*no one*'))
+        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50], ', '.join(others) or '*no one*'), flush=True)
 
         socket.emit('sync', to=sid)
-        print('[Sync] %s' % sid)
+        print('[Sync] %s' % sid, flush=True)

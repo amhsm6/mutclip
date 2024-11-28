@@ -24,7 +24,7 @@ def cleanup():
         with Clipboard.lock:
             empty = list(filter(lambda item: not item[1].clients, Clipboard.clips.items()))
             for id, _ in empty:
-                print(f'Clean {id}')
+                print(f'Clean {id}', flush=True)
                 del Clipboard.clips[id]
 
         time.sleep(60)
