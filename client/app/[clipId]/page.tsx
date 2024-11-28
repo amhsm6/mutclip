@@ -261,7 +261,7 @@ export default function Page({ params }: Props): React.ReactNode {
                         ref={ inputRef }
                         value={ renderedContents }
                         onChange={ e => setText(e.target.value) }
-                        disabled={ !plainText || starting }
+                        disabled={ !plainText || starting || !connRef.current }
                         autoFocus
                         rows={ 10 }
                     />
