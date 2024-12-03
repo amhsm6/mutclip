@@ -23,57 +23,61 @@ def handle_connect(auth):
     clipboard_id = auth['clip_id']
     sid = request.sid
 
-    print('[Connect] %s -> %s' % (sid, clipboard_id), flush=True)
-
     with Clipboard.lock:
         if clipboard_id not in Clipboard.clips:
-            print('[ERROR] No such clipboard', flush=True)
+            print(f'[ERROR] {{{clipboard_id}}} No such clipboard', flush=True)
             socket.emit('noclipboard', to=sid)
             return
 
-        Clipboard.clips[clipboard_id].clients.append(sid)
-        Clipboard.clients[sid] = clipboard_id
+        print(f'[Connect] {{{clipboard_id}}} {sid}', flush=True)
+
+        Clipboard.clips[clipboard_id].clients.add(sid)
+        Clipboard.all_clients[sid] = clipboard_id
 
         socket.emit('tx', to=sid)
         socket.send(Clipboard.clips[clipboard_id].contents, to=sid)
 
-        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50] or '*empty*', sid), flush=True)
+        display_contents = Clipboard.clips[clipboard_id].contents[:50] or '*empty*'
+        print(f'[Send] {{{clipboard_id}}} {display_contents} -> {sid}', flush=True)
 
 @socket.on('disconnect')
 def handle_disconnect():
     sid = request.sid
 
-    print(f'[Disconnect] {sid}', flush=True)
-
     with Clipboard.lock:
-        if sid not in Clipboard.clients:
+        if sid not in Clipboard.all_clients:
             socket.emit('error', to=sid)
             return
 
-        clipboard_id = Clipboard.clients[sid]
+        clipboard_id = Clipboard.all_clients[sid]
 
-        Clipboard.clips[clipboard_id].clients.remove(sid) # FIXME: use set
-        del Clipboard.clients[sid]
+        print(f'[Disconnect] {{{clipboard_id}}} {sid}', flush=True)
+
+        Clipboard.clips[clipboard_id].clients.remove(sid)
+        del Clipboard.all_clients[sid]
 
 @socket.on('message')
 def handle_message(data):
     sid = request.sid
 
-    print('[Recv] %s <- %s' % (data[:50] or '*empty*', sid), flush=True)
-
     with Clipboard.lock:
-        if sid not in Clipboard.clients:
+        if sid not in Clipboard.all_clients:
             socket.emit('error', to=sid)
             return
 
-        clipboard_id = Clipboard.clients[sid]
+        clipboard_id = Clipboard.all_clients[sid]
+
+        display_contents = data[:50] or '*empty*'
+        print(f'[Recv] {{{clipboard_id}}} {display_contents} <- {sid}', flush=True)
 
         Clipboard.clips[clipboard_id].contents = data
 
-        others = list(filter(lambda id: id != sid, Clipboard.clips[clipboard_id].clients))
+        others = list(filter(lambda id: id != sid, Clipboard.clips[clipboard_id].all_clients))
         socket.emit('tx', to=others)
         socket.send(data, to=others)
-        print('[Send] %s -> %s' % (Clipboard.clips[clipboard_id].contents[:50], ', '.join(others) or '*no one*'), flush=True)
+
+        display_receivers = ', '.join(others) or '*no one*'
+        print(f'[Send] {{{clipboard_id}}} {display_contents} -> {display_receivers}', flush=True)
 
         socket.emit('sync', to=sid)
-        print('[Sync] %s' % sid, flush=True)
+        print(f'[Sync] {{{clipboard_id}}} {sid}', flush=True)
