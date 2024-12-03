@@ -8,8 +8,6 @@ export default async function Page(): Promise<never> {
         throw new Error('Internal Server Error'); //FIXME: better error handling
     }
 
-    console.log('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-
     const clipId: string = await resp.text();
     redirect(`/${clipId}`);
 }
