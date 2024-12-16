@@ -21,6 +21,17 @@
     flex-direction: column;
 }
 
+.header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.header > strong {
+    font-size: 1.4em;
+}
+
 .input > textarea {
     resize: none;
     outline: none;

@@ -29,15 +29,16 @@ def handle_connect(auth):
             socket.emit('noclipboard', to=sid)
             return
 
+        clipboard = Clipboard.clips[clipboard_id]
+
+        clipboard.clients.add(sid)
+        Clipboard.all_clients[sid] = clipboard_id
         print(f'[Connect] {{{clipboard_id}}} {sid}', flush=True)
 
-        Clipboard.clips[clipboard_id].clients.add(sid)
-        Clipboard.all_clients[sid] = clipboard_id
-
         socket.emit('tx', to=sid)
-        socket.send(Clipboard.clips[clipboard_id].contents, to=sid)
+        socket.send(clipboard.contents, to=sid)
 
-        display_contents = Clipboard.clips[clipboard_id].contents[:50] or '*empty*'
+        display_contents = clipboard.contents[:50] or '*empty*'
         print(f'[Send] {{{clipboard_id}}} {display_contents} -> {sid}', flush=True)
 
 @socket.on('disconnect')
@@ -66,13 +67,14 @@ def handle_message(data):
             return
 
         clipboard_id = Clipboard.all_clients[sid]
+        clipboard = Clipboard.clips[clipboard_id]
 
         display_contents = data[:50] or '*empty*'
         print(f'[Recv] {{{clipboard_id}}} {display_contents} <- {sid}', flush=True)
 
-        Clipboard.clips[clipboard_id].contents = data
+        clipboard.contents = data
 
-        others = list(filter(lambda id: id != sid, Clipboard.clips[clipboard_id].all_clients))
+        others = list(filter(lambda id: id != sid, clipboard.clients))
         socket.emit('tx', to=others)
         socket.send(data, to=others)
 

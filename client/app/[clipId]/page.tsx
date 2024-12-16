@@ -101,6 +101,12 @@ export default function Page({ params }: Props): React.ReactNode {
             // FIXME: 'Server connected' message shows up after
         });
 
+        socket.on("error", () => {
+            pushMessage({ type: MessageType.ERROR, text: "Internal Server Error" });
+            socket.disconnect();
+            connRef.current = null;
+        });
+
         connRef.current = socket;
 
         return () => {
@@ -128,17 +134,14 @@ export default function Page({ params }: Props): React.ReactNode {
                 .then(setRenderedContents)
                 .then(() => setLoading(false));
         } else {
-            contents.data.arrayBuffer()
-                .then(buf => new Uint8Array(buf))
-                .then(toBinaryString)
-                .then(btoa)
-                .then(setRenderedContents)
-                .then(() => setLoading(false));
+            setRenderedContents(`${contents.filename || "file"}: ${contents.contentType}`);
+            setLoading(false);
         }
     }, [contents.data, contents.contentType, contents.filename]);
 
     const reset = () => {
         setContents({ data: new Blob(), contentType: "text/plain", filename: null });
+
         // TODO: implement clearing queue
     };
 
@@ -151,6 +154,7 @@ export default function Page({ params }: Props): React.ReactNode {
     };
 
     const setFile = (file: File) => {
+        console.log("set file", file);
         if (file.size > 50 * 1024 * 1024) {
             pushMessage({ type: MessageType.ERROR, text: "Maximum file size is 50 MB" });
             return;
@@ -238,6 +242,10 @@ export default function Page({ params }: Props): React.ReactNode {
         const file = files[0];
 
         setFile(file);
+
+        if (uploaderRef.current) {
+            uploaderRef.current.value = "";
+        } 
     };
 
     const download = () => {
@@ -257,6 +265,10 @@ export default function Page({ params }: Props): React.ReactNode {
         <div className={ styles.content }>
             <div className={ styles.main }>
                 <div className={ styles.input }>
+                    <div className={ styles.header }>
+                        <strong>{ clipId }</strong>
+                    </div>
+
                     <textarea
                         ref={ inputRef }
                         value={ renderedContents }
