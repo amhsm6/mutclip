@@ -14,31 +14,25 @@ import { FaRegCopy } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
 
-const encode = (contents: Contents): Blob => {
-    return new Blob([
-        contents.contentType,
-        "<",
-        contents.filename || "",
-        ">",
-        contents.data
-    ]);
+type Chunk = {
+    index: number,
+    data: Blob
 };
 
-const decode = async (buf: Blob): Promise<Contents> => {
-    const text = await buf.text();
+const cut = (data: Blob): Chunk[] => {
+    const chunkSize = 15 * 1024;
+    const numChunks = Math.ceil(data.size / chunkSize);
 
-    const [type, ...rest] = text.split('<');
-    const [name] = rest.join().split('>');
-    const databegin = type.length + 1 + name.length + 1;
+    const chunks = [];
+    for (let i = 0; i < numChunks; i++) {
+        chunks.push({
+            index: i,
+            data: data.slice(i, i + chunkSize)
+        });
+    }
 
-    return {
-        data: buf.slice(databegin),
-        contentType: type || "text/plain",
-        filename: name || null
-    };
+    return chunks;
 };
-
-const toBinaryString = (buf: Uint8Array): string => buf.reduce((acc, x) => acc + String.fromCharCode(x), "");
 
 type Props = {
     params: Promise<{ clipId: string }>
@@ -47,20 +41,14 @@ type Props = {
 export default function Page({ params }: Props): React.ReactNode {
     const clipId = use(params).clipId;
 
-    const connRef = useRef<Socket | null>(null);
-    const clipboardRef = useRef<ClipboardJS | null>(null);
+    const socketRef = useRef<Socket | null>(null);
 
-    const [contents, setContents] = useState<Contents & { incoming?: boolean }>({
-        data: new Blob(),
-        contentType: "text/plain",
-        filename: null
-    });
-    const plainText = contents.contentType === "text/plain";
-
+    const [contents, setContents] = useState<Contents & { incoming?: boolean }>({ type: "text", data: "" })
     const [renderedContents, setRenderedContents] = useState<string>("");
 
     const [starting, setStarting] = useState<boolean>(true);
     const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<Error | null>(null);
 
     const { pushMessage } = useContext(MessageQueueContext);
 
@@ -68,6 +56,8 @@ export default function Page({ params }: Props): React.ReactNode {
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const uploaderRef = useRef<HTMLInputElement>(null);
     const downloaderRef = useRef<HTMLAnchorElement>(null);
+
+    if (error) { throw error; }
 
     useEffect(() => {
         pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
@@ -80,81 +70,92 @@ export default function Page({ params }: Props): React.ReactNode {
             pushMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
         });
 
-        socket.on("tx", () => {
+        socket.on("text", (data: string) => {
+            setContents({ type: "text", data, incoming: true });
+            setLoading(true);
+        });
+
+        socket.on("file", () => {
+            alert("not implemented");
             setLoading(true);
         });
 
         socket.on("sync", () => {
             setLoading(false);
         });
-
-        socket.on("message", async (data: string) => {
-            const decoded = await decode(new Blob([data]));
-            setContents({ ...decoded, incoming: true });
-        });
         
         socket.on("noclipboard", () => {
-            pushMessage({ type: MessageType.ERROR, text: "This clipboard does not exist" });
             socket.disconnect();
-            connRef.current = null;
-            // TODO: Do something if the clipboard does not exist
-            // FIXME: 'Server connected' message shows up after
+            socketRef.current = null;
+
+            setError(new Error("This clipboard does not exist"));
         });
 
         socket.on("error", () => {
-            pushMessage({ type: MessageType.ERROR, text: "Internal Server Error" });
             socket.disconnect();
-            connRef.current = null;
+            socketRef.current = null;
+
+            setError(new Error("Internal Server Error"));
         });
 
-        connRef.current = socket;
+        socketRef.current = socket;
 
         return () => {
             socket.disconnect();
-            connRef.current = null;
+            socketRef.current = null;
         };
     }, []);
 
     useEffect(() => {
-        const conn = connRef.current;
-
-        if (!conn || !conn.connected || contents.incoming) { return; }
+        const socket = socketRef.current;
+        if (!socket || !socket.connected || contents.incoming) { return; }
 
         const timeout = setTimeout(() => {
             setLoading(true);
-            conn.send(encode(contents));
+
+            if (contents.type === "text") {
+                socket.emit("text", contents.data);
+            } else {
+                const chunks = cut(contents.data);
+
+                socket.emit("file", { type: contents.contentType, name: contents.filename, numChunks: chunks.length });
+
+                const send = (index: number) => {
+                    console.log(`Sending ${index}`);
+                    socket.emit("chunk", chunks[index], (ok: boolean | undefined) => {
+                        if (ok) { send(index + 1); }
+                    });
+                }
+
+                send(0);
+            }
         }, 500);
 
         return () => clearTimeout(timeout);
-    }, [contents.data, contents.contentType, contents.filename, contents.incoming]);
+    }, [contents.data]);
 
+    // FIXME: unnecessary renders only to setLoading(false)
     useEffect(() => {
-        if (plainText) {
-            contents.data.text()
-                .then(setRenderedContents)
-                .then(() => setLoading(false));
+        if (contents.type === "text") {
+            setRenderedContents(contents.data);
         } else {
-            setRenderedContents(`${contents.filename || "file"}: ${contents.contentType}`);
-            setLoading(false);
+            setRenderedContents(`${contents.filename}: ${contents.contentType}`);
         }
-    }, [contents.data, contents.contentType, contents.filename]);
+
+        setLoading(false);
+    }, [contents.data, contents.incoming]);
 
     const reset = () => {
-        setContents({ data: new Blob(), contentType: "text/plain", filename: null });
+        setContents({ type: "text", data: "" });
 
         // TODO: implement clearing queue
     };
 
     const setText = (x: string) => {
-        setContents({
-            data: new Blob([x]),
-            contentType: "text/plain",
-            filename: null
-        });
+        setContents({ type: "text", data: x });
     };
 
     const setFile = (file: File) => {
-        console.log("set file", file);
         if (file.size > 50 * 1024 * 1024) {
             pushMessage({ type: MessageType.ERROR, text: "Maximum file size is 50 MB" });
             return;
@@ -172,9 +173,9 @@ export default function Page({ params }: Props): React.ReactNode {
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
 
             setContents({
-                data: new Blob([res]),
+                type: "file",
                 contentType: type,
-                filename: file.name
+                filename: file.name || "file", data: new Blob([res])
             });
         };
 
@@ -232,7 +233,7 @@ export default function Page({ params }: Props): React.ReactNode {
             body.onpaste = null;
             body.onkeydown = null;
         };
-    }, [contents.data, contents.contentType, contents.filename]);
+    }, []);
 
     const initiateUpload = () => uploaderRef.current?.click();
 
@@ -250,9 +251,9 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const download = () => {
         const downloader = downloaderRef.current;
-        if (!downloader || plainText) { return; }
+        if (!downloader || contents.type === "text") { return; }
 
-        const name = contents.filename || "file";
+        const name = contents.filename;
 
         pushMessage({ type: MessageType.INFO, text: `Downloading ${name}` });
 
@@ -273,7 +274,7 @@ export default function Page({ params }: Props): React.ReactNode {
                         ref={ inputRef }
                         value={ renderedContents }
                         onChange={ e => setText(e.target.value) }
-                        disabled={ !plainText || starting || !connRef.current }
+                        disabled={ contents.type === "file" || starting || !socketRef.current }
                         autoFocus
                         rows={ 10 }
                     />
@@ -309,7 +310,7 @@ export default function Page({ params }: Props): React.ReactNode {
             </div>
 
             <div className={ styles.preview } >
-                <Preview contents={ contents } />
+                {/*<Preview contents={ contents } />*/}
             </div>
         </div>
     );

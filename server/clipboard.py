@@ -11,6 +11,15 @@ class Clipboard:
     def __init__(self):
         self.contents = ''
         self.clients = set()
+        self.buffer = None
+
+class FileBuffer:
+    def __init__(self, num_chunks, content_type, filename):
+        self.data = bytearray()
+        self.next_chunk = 0
+        self.num_chunks = num_chunks
+        self.content_type = content_type
+        self.filename = filename
     
 def generate_id():
     clipboard_id = None

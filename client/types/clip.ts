@@ -1,8 +1,5 @@
-export type Contents = {
-    data: Blob,
-    contentType: string,
-    filename: string | null
-};
+export type Contents = { type: "text", data: string }
+                     | { type: "file", contentType: string, filename: string, data: Blob };
 
 export type Message = {
     type: MessageType,
