@@ -9,13 +9,18 @@ class Clipboard:
     all_clients = {}
 
     def __init__(self):
-        self.contents = ''
+        self.contents = Text('')
         self.clients = set()
-        self.buffer = None
 
-class FileBuffer:
+class Text:
+    def __init__(self, text):
+        self.type = 'text'
+        self.data = text
+
+class File:
     def __init__(self, num_chunks, content_type, filename):
-        self.data = bytearray()
+        self.type = 'file'
+        self.chunks = []
         self.next_chunk = 0
         self.num_chunks = num_chunks
         self.content_type = content_type

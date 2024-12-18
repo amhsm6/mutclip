@@ -75,9 +75,15 @@ export default function Page({ params }: Props): React.ReactNode {
             setLoading(true);
         });
 
-        socket.on("file", () => {
-            alert("not implemented");
+        socket.on("file", (foo: undefined) => {
+            console.log(foo);
             setLoading(true);
+        });
+
+        socket.on("chunk", (foo: undefined, callback: (ok: boolean) => void) => {
+            console.log(foo);
+
+            callback(true);
         });
 
         socket.on("sync", () => {
@@ -121,7 +127,6 @@ export default function Page({ params }: Props): React.ReactNode {
                 socket.emit("file", { type: contents.contentType, name: contents.filename, numChunks: chunks.length });
 
                 const send = (index: number) => {
-                    console.log(`Sending ${index}`);
                     socket.emit("chunk", chunks[index], (ok: boolean | undefined) => {
                         if (ok) { send(index + 1); }
                     });

@@ -1,6 +1,6 @@
 from flask import Flask, request
 from flask_socketio import SocketIO
-from clipboard import Clipboard, FileBuffer, generate_id, start_cleanup
+from clipboard import Clipboard, Text, File, generate_id, start_cleanup
 
 app = Flask(__name__)
 socket = SocketIO(app, cors_allowed_origins='*', max_http_buffer_size=1e8)
@@ -18,10 +18,57 @@ def newclip():
 
     return id
 
+def send_contents(socket, sid, clipboard_id, contents, users):
+    if contents.type == 'text':
+        socket.emit('text', contents.data, to=users)
+
+        display_receivers = ', '.join(users) or '*no one*'
+        print(f'[Send] {{{clipboard_id}}} {contents.data} -> {display_receivers}', flush=True)
+
+    elif contents.type == 'file':
+        header = {
+            'type': contents.content_type,
+            'name': contents.filename,
+            'numChunks': contents.num_chunks
+        }     
+        socket.emit('file', header, to=users)
+
+        def send(chunk_index):
+            numack = 0
+
+            # FIXME
+            def callback(ok):
+                global numack
+
+                if ok:
+                    numack += 1
+                else:
+                    raise Exception()
+
+                if numack == len(users):
+                    send(chunk_index + 1)
+                else:
+                    raise Exception()
+
+            if chunk_index >= len(contents.chunks):
+                raise Exception()
+                
+            chunk = {
+                'index': chunk_index,
+                'data': contents.chunks[chunk_index]
+            }
+            socket.emit('chunk', chunk, to=users, callback=callback)
+
+        send(0)
+
+    else:
+        raise Exception()
+
 @socket.on('connect')
 def handle_connect(auth):
-    clipboard_id = auth['clip_id']
     sid = request.sid
+
+    clipboard_id = auth['clip_id']
 
     with Clipboard.lock:
         if clipboard_id not in Clipboard.clips:
@@ -35,8 +82,7 @@ def handle_connect(auth):
         Clipboard.all_clients[sid] = clipboard_id
         print(f'[Connect] {{{clipboard_id}}} {sid}', flush=True)
 
-        socket.emit('text', clipboard.contents, to=sid)
-        print(f'[Send] {{{clipboard_id}}} {clipboard.contents} -> {sid}', flush=True)
+        send_contents(socket, sid, clipboard_id, clipboard.contents, [sid])
 
 @socket.on('disconnect')
 def handle_disconnect():
@@ -49,10 +95,9 @@ def handle_disconnect():
 
         clipboard_id = Clipboard.all_clients[sid]
 
-        print(f'[Disconnect] {{{clipboard_id}}} {sid}', flush=True)
-
         Clipboard.clips[clipboard_id].clients.remove(sid)
         del Clipboard.all_clients[sid]
+        print(f'[Disconnect] {{{clipboard_id}}} {sid}', flush=True)
 
 @socket.on('text')
 def handle_text(data):
@@ -66,14 +111,11 @@ def handle_text(data):
         clipboard_id = Clipboard.all_clients[sid]
         clipboard = Clipboard.clips[clipboard_id]
 
-        clipboard.contents = data
+        clipboard.contents = Text(data)
         print(f'[Recv] {{{clipboard_id}}} {data} <- {sid}', flush=True)
 
         others = list(filter(lambda id: id != sid, clipboard.clients))
-        socket.emit('text', data, to=others)
-
-        display_receivers = ', '.join(others) or '*no one*'
-        print(f'[Send] {{{clipboard_id}}} {data} -> {display_receivers}', flush=True)
+        send_contents(socket, sid, clipboard_id, clipboard.contents, others)
 
         socket.emit('sync', to=sid)
         print(f'[Sync] {{{clipboard_id}}} {sid}', flush=True)
@@ -86,15 +128,16 @@ def handle_file(data):
     filename = data['name']
     num_chunks = data['numChunks']
 
-    print(f'{content_type} {filename} {num_chunks}')
-
     with Clipboard.lock:
         if sid not in Clipboard.all_clients:
             socket.emit('error', to=sid)
             return
 
         clipboard_id = Clipboard.all_clients[sid]
-        Clipboard.clips[clipboard_id].buffer = FileBuffer(num_chunks, content_type, filename)
+        clipboard = Clipboard.clips[clipboard_id]
+
+        clipboard.contents = File(num_chunks, content_type, filename)
+        print(f'[Recv] {{{clipboard_id}}} [INIT/{num_chunks}] {filename}: {content_type} <- {sid}', flush=True)
 
 @socket.on('chunk')
 def handle_chunk(data):
@@ -109,16 +152,27 @@ def handle_chunk(data):
             return
 
         clipboard_id = Clipboard.all_clients[sid]
-        buffer = Clipboard.clips[clipboard_id].buffer
+        clipboard = Clipboard.clips[clipboard_id]
 
-        if not buffer or chunk_index != buffer.next_chunk:
+        contents = clipboard.contents
+
+        if contents.type != 'file':
+            return False
+
+        if chunk_index != contents.next_chunk:
             socket.emit('wrongchunk', to=sid)
             return
 
-        buffer.data += chunk_data
-        buffer.next_chunk += 1
+        contents.chunks.append(chunk_data)
+        contents.next_chunk += 1
 
-        if buffer.next_chunk < buffer.num_chunks:
+        print(f'[Recv] {{{clipboard_id}}} [{chunk_index+1}/{contents.num_chunks}] {contents.filename}: {contents.content_type} <- {sid}', flush=True)
+
+        if contents.next_chunk < contents.num_chunks:
             return True
 
+        others = list(filter(lambda id: id != sid, clipboard.clients))
+        send_contents(socket, sid, clipboard_id, contents, others)
 
+        socket.emit('sync', to=sid)
+        print(f'[Sync] {{{clipboard_id}}} {sid}', flush=True)
