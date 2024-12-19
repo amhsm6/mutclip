@@ -20,6 +20,7 @@ class Text:
 class File:
     def __init__(self, num_chunks, content_type, filename):
         self.type = 'file'
+        self.ready = False
         self.chunks = []
         self.next_chunk = 0
         self.num_chunks = num_chunks

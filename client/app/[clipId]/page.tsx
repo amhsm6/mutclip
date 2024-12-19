@@ -6,7 +6,7 @@ import MessageQueueContext from "@/contexts/MessageQueueContext";
 import ControlButton from "@/components/ControlButton";
 import MessageBox from "@/components/MessageBox";
 import Preview from "@/components/Preview";
-import { Contents, MessageType } from "@/types/clip";
+import { Contents, Chunk, MessageType } from "@/types/clip";
 import { FaRegTrashCan, FaDownload, FaUpload } from "react-icons/fa6";
 import { io, Socket } from "socket.io-client";
 import ClipboardJS from "clipboard";
@@ -14,24 +14,31 @@ import { FaRegCopy } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
 
-type Chunk = {
-    index: number,
-    data: Blob
-};
-
 const cut = (data: Blob): Chunk[] => {
-    const chunkSize = 15 * 1024;
+    const chunkSize = 150 * 1024;
     const numChunks = Math.ceil(data.size / chunkSize);
 
     const chunks = [];
     for (let i = 0; i < numChunks; i++) {
         chunks.push({
             index: i,
-            data: data.slice(i, i + chunkSize)
+            data: data.slice(i * chunkSize, i * chunkSize + chunkSize)
         });
     }
 
     return chunks;
+};
+
+type FileBuffer = {
+    header: Header,
+    chunks: Chunk[],
+    nextChunk: number
+};
+
+type Header = {
+    type: string,
+    name: string,
+    numChunks: number
 };
 
 type Props = {
@@ -44,6 +51,7 @@ export default function Page({ params }: Props): React.ReactNode {
     const socketRef = useRef<Socket | null>(null);
 
     const [contents, setContents] = useState<Contents & { incoming?: boolean }>({ type: "text", data: "" })
+    const fileBufferRef = useRef<FileBuffer | null>(null);
     const [renderedContents, setRenderedContents] = useState<string>("");
 
     const [starting, setStarting] = useState<boolean>(true);
@@ -75,15 +83,55 @@ export default function Page({ params }: Props): React.ReactNode {
             setLoading(true);
         });
 
-        socket.on("file", (foo: undefined) => {
-            console.log(foo);
+        socket.on("file", (header: Header) => {
+            fileBufferRef.current = {
+                header,
+                chunks: [],
+                nextChunk: 0
+            };
+
             setLoading(true);
+            pushMessage({ type: MessageType.INFO, text: `Receiving ${header.name}` });
         });
 
-        socket.on("chunk", (foo: undefined, callback: (ok: boolean) => void) => {
-            console.log(foo);
+        socket.on("chunk", (chunk: Chunk, callback: (cont: boolean) => void) => {
+            if (!fileBufferRef.current) {
+                callback(false);
+                return;
+            }
 
-            callback(true);
+            if (fileBufferRef.current.nextChunk != chunk.index) {
+                fileBufferRef.current = null;
+
+                pushMessage({ type: MessageType.ERROR, text: "Internal Server Error" });
+                setLoading(false);
+
+                callback(false);
+                return;
+            }
+
+            fileBufferRef.current.chunks.push(chunk);
+            fileBufferRef.current.nextChunk++;
+
+            if (fileBufferRef.current.nextChunk < fileBufferRef.current.header.numChunks) {
+                callback(true);
+                return;
+            }
+
+            const data = new Blob(fileBufferRef.current.chunks.map(chunk => chunk.data));
+
+            setContents({
+                type: "file",
+                contentType: fileBufferRef.current.header.type,
+                filename: fileBufferRef.current.header.name,
+                data,
+                chunks: fileBufferRef.current.chunks,
+                incoming: true
+            });
+
+            fileBufferRef.current = null;
+
+            callback(false);
         });
 
         socket.on("sync", () => {
@@ -98,10 +146,7 @@ export default function Page({ params }: Props): React.ReactNode {
         });
 
         socket.on("error", () => {
-            socket.disconnect();
-            socketRef.current = null;
-
-            setError(new Error("Internal Server Error"));
+            pushMessage({ type: MessageType.ERROR, text: "Internal Server Error" });
         });
 
         socketRef.current = socket;
@@ -122,15 +167,15 @@ export default function Page({ params }: Props): React.ReactNode {
             if (contents.type === "text") {
                 socket.emit("text", contents.data);
             } else {
-                const chunks = cut(contents.data);
-
-                socket.emit("file", { type: contents.contentType, name: contents.filename, numChunks: chunks.length });
+                socket.emit("file", { type: contents.contentType, name: contents.filename, numChunks: contents.chunks.length });
 
                 const send = (index: number) => {
-                    socket.emit("chunk", chunks[index], (ok: boolean | undefined) => {
-                        if (ok) { send(index + 1); }
+                    if (index >= contents.chunks.length) { return; }
+
+                    socket.emit("chunk", contents.chunks[index], (cont: boolean) => {
+                        if (cont) { send(index + 1); }
                     });
-                }
+                };
 
                 send(0);
             }
@@ -152,8 +197,6 @@ export default function Page({ params }: Props): React.ReactNode {
 
     const reset = () => {
         setContents({ type: "text", data: "" });
-
-        // TODO: implement clearing queue
     };
 
     const setText = (x: string) => {
@@ -176,11 +219,15 @@ export default function Page({ params }: Props): React.ReactNode {
             if (!res || !(res instanceof ArrayBuffer)) { return; }
 
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
+            const data = new Blob([res]);
+            const chunks = cut(data);
 
             setContents({
                 type: "file",
                 contentType: type,
-                filename: file.name || "file", data: new Blob([res])
+                filename: file.name || "file",
+                data,
+                chunks
             });
         };
 
@@ -190,7 +237,8 @@ export default function Page({ params }: Props): React.ReactNode {
     const copy = () => {
         if (!inputRef.current) { return; }
         ClipboardJS.copy(inputRef.current);
-        // FIXME: clipboard a bit wanky
+
+        pushMessage({ type: MessageType.INFO, text: "Copied" });
     };
 
     const paste = (e: ClipboardEvent) => {
@@ -315,7 +363,7 @@ export default function Page({ params }: Props): React.ReactNode {
             </div>
 
             <div className={ styles.preview } >
-                {/*<Preview contents={ contents } />*/}
+                <Preview contents={ contents } />
             </div>
         </div>
     );
