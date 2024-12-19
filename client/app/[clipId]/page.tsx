@@ -15,7 +15,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
 
 const cut = (data: Blob): Chunk[] => {
-    const chunkSize = 150 * 1024;
+    const chunkSize = 500 * 1024;
     const numChunks = Math.ceil(data.size / chunkSize);
 
     const chunks = [];
