@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Message, MessageType } from "@/types/clip";
+import { Message, MessageType } from "@/types/clipboard";
 import styles from "./MessageEntry.module.css";
 
 export type EntryProps = {

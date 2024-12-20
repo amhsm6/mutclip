@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useEffect, useRef } from "react";
 import type { EntryProps } from "@/components/MessageEntry";
-import type { Message } from "@/types/clip";
+import type { Message } from "@/types/clipboard";
 
 type MessageQueue = {
     entries: Entry[],

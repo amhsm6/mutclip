@@ -131,7 +131,7 @@ def handle_file(data):
         clipboard_id = Clipboard.all_clients[sid]
         clipboard = Clipboard.clips[clipboard_id]
 
-        clipboard.contents = File(num_chunks, content_type, filename)
+        clipboard.contents = File(num_chunks, content_type, filename, sid)
         print(f'[Recv] {{{clipboard_id}}} [INIT/{num_chunks}] {filename}: {content_type} <- {sid}', flush=True)
 
 @socket.on('chunk')
@@ -151,7 +151,10 @@ def handle_chunk(data):
 
         contents = clipboard.contents
 
-        if contents.type != 'file':
+        if contents.type != 'file' or contents.sid != sid:
+            socket.emit('sync', to=sid)
+            print(f'[Sync] {{{clipboard_id}}} {sid}', flush=True)
+
             return False
 
         if chunk_index != contents.next_chunk:

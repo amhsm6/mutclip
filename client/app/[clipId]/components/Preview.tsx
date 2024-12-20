@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { Contents } from "@/types/clip";
+import type { Contents } from "@/types/clipboard";
 import styles from "./Preview.module.css";
 
 const previewTypes: string[] = ["image/gif", "image/png", "image/jpeg"];

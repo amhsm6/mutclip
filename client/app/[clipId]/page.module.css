@@ -68,14 +68,6 @@
     .copy:hover {
         color: green;
     }
-
-    .upload:hover {
-        color: magenta;
-    }
-
-    .download:hover {
-        color: blue;
-    }
 }
 
 .message-box {

@@ -18,7 +18,7 @@ class Text:
         self.data = text
 
 class File:
-    def __init__(self, num_chunks, content_type, filename):
+    def __init__(self, num_chunks, content_type, filename, sid):
         self.type = 'file'
         self.ready = False
         self.chunks = []
@@ -26,6 +26,7 @@ class File:
         self.num_chunks = num_chunks
         self.content_type = content_type
         self.filename = filename
+        self.sid = sid
     
 def generate_id():
     clipboard_id = None
