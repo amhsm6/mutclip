@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, abort
 from flask_socketio import SocketIO
 from clipboard import Clipboard, Text, File, generate_id, start_cleanup
 
@@ -18,11 +18,19 @@ def newclip():
 
     return id
 
+@app.route('/check/<id>')
+def check(id):
+    with Clipboard.lock:
+        if id not in Clipboard.clips:
+            abort(404)
+    
+    return ''
+
 def send_contents(socket, clipboard_id, contents, users):
     display_users = ', '.join(users) or '*no one*'
 
     if contents.type == 'text':
-        socket.emit('text', contents.data, to=users)
+        socket.emit('text', contents.data, to=users, include_self=False)
         print(f'[Send] {{{clipboard_id}}} {contents.data} -> {display_users}', flush=True)
 
     elif contents.type == 'file':
@@ -34,7 +42,7 @@ def send_contents(socket, clipboard_id, contents, users):
             'name': contents.filename,
             'numChunks': contents.num_chunks
         }     
-        socket.emit('file', header, to=users)
+        socket.emit('file', header, to=users, include_self=False)
         print(f'[Send] {{{clipboard_id}}} [INIT/{contents.num_chunks}] {contents.filename}: {contents.content_type} -> {display_users}', flush=True)
 
         def send(chunk_index, user):

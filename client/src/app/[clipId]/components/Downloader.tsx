@@ -1,7 +1,9 @@
+"use client";
+
 import React, { useContext, useRef } from "react";
 import MessageQueueContext from "@/contexts/MessageQueueContext";
 import { Contents, MessageType } from "@/types/clipboard";
-import ControlButton from "./ControlButton";
+import ControlButton from "@/components/ControlButton";
 import { FaDownload } from "react-icons/fa6";
 import styles from "./Downloader.module.css";
 

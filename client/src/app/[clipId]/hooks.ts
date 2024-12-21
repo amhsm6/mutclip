@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import MessageQueueContext from "@/contexts/MessageQueueContext";
 import { Contents, Chunk, MessageType } from "@/types/clipboard";
 import { io, Socket } from "socket.io-client";
@@ -178,7 +178,7 @@ export function useSocketContents({ clipId }: Props) {
         const socket = socketRef.current;
         if (!socket) { return; }
 
-        setSocketState(s => ({ ...s, sending: true }));
+        setSocketState(s => ({ ...s, sending: false, receiving: false }));
 
         socket.emit("text", "");
         setContents({ type: "text", data: "", incoming: true });

@@ -2,10 +2,10 @@
 
 import React, { useContext } from "react";
 import MessageQueueContext from "@/contexts/MessageQueueContext";
-import MessageEntry from "@/components/MessageEntry";
+import MessageEntry from "./MessageEntry";
 import styles from "./MessageBox.module.css";
 
-export default function MessageBox(): React.ReactNode {
+export default function MessageBox() {
     const { entries } = useContext(MessageQueueContext);
 
     return (

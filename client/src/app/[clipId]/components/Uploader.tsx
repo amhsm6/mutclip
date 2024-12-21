@@ -1,5 +1,7 @@
+"use client";
+
 import React, { useRef } from "react";
-import ControlButton from "./ControlButton";
+import ControlButton from "@/components/ControlButton";
 import { FaUpload } from "react-icons/fa6";
 import styles from "./Uploader.module.css";
 

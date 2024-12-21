@@ -12,16 +12,16 @@
   "dependencies": {
     "clipboard": "^2.0.11",
     "next": "^15.0.3",
-    "react": "^18",
-    "react-dom": "^18",
-    "react-icons": "^5.3.0",
-    "react-spinners": "^0.14.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-icons": "^5.4.0",
+    "react-spinners": "^0.15.0",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "typescript": "^5"
   }
 }

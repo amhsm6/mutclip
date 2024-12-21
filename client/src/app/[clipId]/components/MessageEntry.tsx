@@ -11,7 +11,7 @@ export type EntryProps = {
 
 const remToPx = (rem: number) => rem * parseFloat(getComputedStyle(document.documentElement).fontSize);
 
-export default function MessageEntry({ message, animation }: EntryProps): React.ReactNode {
+export default function MessageEntry({ message, animation }: EntryProps) {
     const DIRECTION = screen.width > remToPx(45) && screen.width < remToPx(60) ? 1 : -1;
 
     let typeclass = "";
@@ -32,8 +32,8 @@ export default function MessageEntry({ message, animation }: EntryProps): React.
         default:
     }
 
-    const [dy, setDy] = useState<number>(0);
-    const [die, setDie] = useState<boolean>(false);
+    const [dy, setDy] = useState(0);
+    const [die, setDie] = useState(false);
 
     useEffect(() => {
         if (animation > 0) {

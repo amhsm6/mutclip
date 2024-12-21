@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useState, useEffect, useRef } from "react";
-import type { EntryProps } from "@/components/MessageEntry";
+import type { EntryProps } from "@/app/[clipId]/components/MessageEntry";
 import type { Message } from "@/types/clipboard";
 
 type MessageQueue = {
@@ -24,7 +24,7 @@ type Props = { children: React.ReactNode };
 
 export function MessageQueueProvider({ children }: Props): React.ReactNode {
     const [entries, setEntries] = useState<Entry[]>([]);
-    const newEntryId = useRef<number>(0);
+    const newEntryId = useRef(0);
 
     const pushMessage: PushMessage = message => {
         setEntries(es => [

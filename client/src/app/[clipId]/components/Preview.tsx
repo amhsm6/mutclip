@@ -8,7 +8,7 @@ const previewTypes: string[] = ["image/gif", "image/png", "image/jpeg"];
 
 type Props = { contents: Contents };
 
-export default function Preview({ contents }: Props): React.ReactNode {
+export default function Preview({ contents }: Props) {
     if (contents.type === "text" || !previewTypes.includes(contents.contentType)) {
         return null;
     }

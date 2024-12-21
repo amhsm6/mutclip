@@ -1,0 +1,30 @@
+.container {
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 80px;
+}
+
+/* FIXME: !important because of next js inconsistent css loading order */
+
+.generate {
+    height: 80px;
+}
+
+.generate > button {
+    padding: 8px;
+    border: none!important;
+    border-radius: 10px;
+    color: white!important;
+    background-color: black!important;
+    font-size: 1.5em!important;
+    margin-bottom: 30px;
+}
+
+@media screen and (pointer: fine) {
+    .generate > button:hover {
+        color: white!important;
+        border: 3px solid magenta!important;
+    }
+}

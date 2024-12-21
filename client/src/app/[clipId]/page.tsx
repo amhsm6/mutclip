@@ -1,30 +1,30 @@
 "use client";
 
 import React, { use, useState, useEffect, useContext, useRef } from "react";
+import { useSocketContents } from "./hooks";
 import BodyRefContext from "@/contexts/BodyRefContext";
 import MessageQueueContext from "@/contexts/MessageQueueContext";
 import { MessageType } from "@/types/clipboard";
-import MessageBox from "@/components/MessageBox";
+import ControlButton from "@/components/ControlButton";
+import MessageBox from "./components/MessageBox";
 import Downloader from "./components/Downloader";
 import Uploader from "./components/Uploader";
 import Preview from "./components/Preview";
-import ControlButton from "./components/ControlButton";
 import { FaRegTrashCan, } from "react-icons/fa6";
 import ClipboardJS from "clipboard";
 import { FaRegCopy } from "react-icons/fa";
 import ClipLoader from "react-spinners/ClipLoader";
 import styles from "./page.module.css";
-import { useSocketContents } from "./hooks";
 
 type Props = {
     params: Promise<{ clipId: string }>
 };
 
-export default function Page({ params }: Props): React.ReactNode {
+export default function Page({ params }: Props) {
     const clipId = use(params).clipId;
 
     const { contents, reset, setText, setFile, socketState } = useSocketContents({ clipId })
-    const [renderedContents, setRenderedContents] = useState<string>("");
+    const [renderedContents, setRenderedContents] = useState("");
 
     const { pushMessage } = useContext(MessageQueueContext);
 
@@ -117,7 +117,7 @@ export default function Page({ params }: Props): React.ReactNode {
                             <ControlButton className={ styles.copy } onClick={ copy }>
                                 <FaRegCopy />
                             </ControlButton>
-                            <Uploader setFile={ setFile } disabled={ socketState.receiving } />
+                            <Uploader setFile={ setFile } disabled={ !socketState.connected || socketState.receiving || socketState.sending } />
                             <Downloader contents={ contents } />
                         </div>
                         { (!socketState.connected || socketState.sending || socketState.receiving) && <ClipLoader /> }

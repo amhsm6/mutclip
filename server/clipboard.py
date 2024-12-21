@@ -35,7 +35,7 @@ def generate_id():
         while not clipboard_id or clipboard_id in Clipboard.clips:
             id_1 = ''.join([random.choice(string.ascii_lowercase) for _ in range(3)])
             id_2 = ''.join([random.choice(string.ascii_lowercase) for _ in range(3)])
-            id_3 = random.randint(0, 999)
+            id_3 = random.randint(100, 999)
             clipboard_id = f'{id_1}-{id_2}-{id_3}'
 
     return clipboard_id
