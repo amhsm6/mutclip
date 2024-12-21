@@ -28,3 +28,24 @@
         border: 3px solid magenta!important;
     }
 }
+
+@media screen and (max-width: 30rem) {
+    .generate {
+        height: 40px;
+    }
+
+    .generate > button {
+        font-size: 1.2em!important;
+        margin-bottom: 20px;
+    }
+}
+
+@media screen and (max-width: 23rem) {
+    .generate {
+        height: 30px;
+    }
+
+    .generate > button {
+        margin-bottom: 15px;
+    }
+}

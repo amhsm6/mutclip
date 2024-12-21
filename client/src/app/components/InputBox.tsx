@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styles from "./InputBox.module.css";
 
 type Props = {
@@ -15,18 +15,25 @@ type Props = {
 //FIXME: firefox .focus() does not work
 
 export default function InputBox({ index, cursor, set, clear, notFound, forceLast }: Props) {
+    const [value, setValue] = useState("");
+
     const ref = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         cursor === index && ref.current?.focus();
     }, [cursor]);
 
+    useEffect(() => {
+        value && set(value);
+    }, [value]);
+
     return (
         <input
             ref={ ref }
+            value={ value }
             className={ `${styles.input} ${notFound ? styles["not-found"] : styles.ok}` }
             maxLength={ 1 }
-            onChange={ e => e.target.value && set(e.target.value) }
+            onChange={ e => setValue(e.target.value.toLowerCase()) }
             onKeyDown={ e => e.key === "Backspace" && clear() }
             onBlur={ () => (cursor === index || forceLast) && ref.current?.focus() }
         />

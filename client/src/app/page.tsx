@@ -6,8 +6,6 @@ import ControlButton from "@/components/ControlButton";
 import IdentifierInput from "./components/IdentifierInput";
 import styles from "./page.module.css";
 
-// TODO: make page responsive
-
 export default function Page() {
     const [error, setError] = useState<Error | null>(null);
     if (error) { throw error; }
