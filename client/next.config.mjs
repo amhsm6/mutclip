@@ -4,7 +4,7 @@ const nextConfig = {
     output: "standalone",
     experimental: {
         serverActions: {
-            allowedOrigins: ["34.227.150.51"]
+            allowedOrigins: ["44.202.27.25"]
         }
     }
 };

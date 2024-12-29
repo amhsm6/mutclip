@@ -3,7 +3,7 @@ from flask_socketio import SocketIO
 from clipboard import Clipboard, Text, File, generate_id, start_cleanup
 
 app = Flask(__name__)
-socket = SocketIO(app, cors_allowed_origins=['http://localhost:3000', 'http://34.227.150.51'])
+socket = SocketIO(app, cors_allowed_origins=['http://localhost:3000', 'http://44.202.27.25'])
 
 start_cleanup()
 
