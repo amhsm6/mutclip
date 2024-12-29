@@ -1,6 +1,6 @@
+from clipboard import Clipboard, Text, File, generate_id, start_cleanup
 from flask import Flask, request, abort
 from flask_socketio import SocketIO
-from clipboard import Clipboard, Text, File, generate_id, start_cleanup
 
 app = Flask(__name__)
 socket = SocketIO(app, cors_allowed_origins=['http://localhost:3000', 'http://44.202.27.25'])
@@ -27,11 +27,15 @@ def check(id):
     return ''
 
 def send_contents(socket, clipboard_id, contents, users):
-    display_users = ', '.join(users) or '*no one*'
+    if not users:
+        print(f'[No one] {{{clipboard_id}}}', flush=True)
+        return
+
+    display_users = ', '.join(users)
 
     if contents.type == 'text':
-        socket.emit('text', contents.data, to=users, include_self=False)
-        print(f'[Send] {{{clipboard_id}}} {contents.data} -> {display_users}', flush=True)
+        socket.emit('text', contents.data, to=users)
+        print(f'[Send] {{{clipboard_id}}} {contents.data or '*empty*'} -> {display_users}', flush=True)
 
     elif contents.type == 'file':
         if not contents.ready:
@@ -42,7 +46,7 @@ def send_contents(socket, clipboard_id, contents, users):
             'name': contents.filename,
             'numChunks': contents.num_chunks
         }     
-        socket.emit('file', header, to=users, include_self=False)
+        socket.emit('file', header, to=users)
         print(f'[Send] {{{clipboard_id}}} [INIT/{contents.num_chunks}] {contents.filename}: {contents.content_type} -> {display_users}', flush=True)
 
         def send(chunk_index, user):
@@ -115,7 +119,7 @@ def handle_text(data):
         clipboard = Clipboard.clips[clipboard_id]
 
         clipboard.contents = Text(data)
-        print(f'[Recv] {{{clipboard_id}}} {data} <- {sid}', flush=True)
+        print(f'[Recv] {{{clipboard_id}}} {data or '*empty*'} <- {sid}', flush=True)
 
         others = list(filter(lambda id: id != sid, clipboard.clients))
         send_contents(socket, clipboard_id, clipboard.contents, others)
