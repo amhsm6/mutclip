@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useContext, useRef } from "react";
 import MessageQueueContext from "@/contexts/MessageQueueContext";
 import { Contents, Chunk, MessageType } from "@/types/clipboard";
