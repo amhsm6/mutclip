@@ -10,16 +10,16 @@ func TestError(t *testing.T) {
 
 	err = nil
 	if IsPublic(err) {
-		t.Error("ok should not be public")
+		t.Fatal("ok should not be public")
 	}
 
 	err = fmt.Errorf("some error")
 	if IsPublic(err) {
-		t.Error("any error should be private")
+		t.Fatal("any error should be private")
 	}
 
 	err = PublicErr(fmt.Errorf("a public err"))
 	if !IsPublic(err) {
-		t.Error("public error should be public")
+		t.Fatal("public error should be public")
 	}
 }

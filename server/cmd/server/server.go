@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"time"
 
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
@@ -35,8 +34,11 @@ func main() {
     })
 
     r.GET("/newclip", func(ctx *gin.Context) {
+        id := clipboard.Generate()
+        log.Infof("Generated %v", id)
+
         ctx.Header("Content-Type", "text/html")
-        ctx.String(200, clipboard.GenerateId())
+        ctx.String(200, id)
     })
 
     // TODO: design error protocol
@@ -47,6 +49,8 @@ func main() {
 
         c, err := upgrader.Upgrade(gctx.Writer, gctx.Request, nil)
         if err != nil {
+            cancel()
+
             log.Error(err)
             return
         }
@@ -58,12 +62,14 @@ func main() {
             }
         }()
 
-        send := make(chan clipboard.ClipboardContent)
+        send := make(chan clipboard.ClipboardMessage)
 
         recv, err := clipboard.Connect(id, send)
         if err != nil {
+            cancel()
+
             log.Error(err)
-            if clipboard.IsPublic(err) {
+            if clipboard.IsPublic(err) { // FIXME
                 c.WriteMessage(websocket.TextMessage, []byte(err.Error()))
             }
 
@@ -72,14 +78,28 @@ func main() {
 
         go func() {
             for {
-                //typ, buf, err := c.ReadMessage()
-                //if err != nil {
-                //    log.Error(err)
-                //    cancel()
-                //    return
-                //}
+                typ, buf, err := c.ReadMessage()
+                if err != nil {
+                   cancel()
 
-                recv <- clipboard.ContentText{}
+                   log.Error(err)
+                   return
+                }
+
+                switch typ {
+                case websocket.TextMessage:
+                    recv <- clipboard.ClipboardMessage{ Binary: false, Data: buf }
+
+                case websocket.BinaryMessage:
+                    recv <- clipboard.ClipboardMessage{ Binary: true, Data: buf }
+
+                case websocket.CloseMessage:
+                    cancel()
+
+                    log.Error("Disconnected")
+                    return
+                }
+
             }
         }()
 
@@ -87,16 +107,26 @@ func main() {
             for {
                 select {
                 case <-send:
-                    c.WriteMessage(
+                    err := c.WriteMessage(
                         websocket.TextMessage,
-                        []byte(clipboard.GenerateId()),
+                        []byte(clipboard.Generate()),
                     )
+                    if err != nil {
+                        cancel()
+
+                        log.Error(err)
+                        return
+                    }
 
                 case <-ctx.Done():
                     return
                 }
             }
         }()
+
+        go clipboard.Run(id, ctx)
+
+        log.Infof("Connected %v", id)
 
         <-ctx.Done()
     })
