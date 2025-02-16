@@ -5,6 +5,7 @@ go 1.23.4
 require (
 	github.com/charmbracelet/log v0.4.0
 	github.com/gin-gonic/gin v1.10.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 )
 

@@ -2,27 +2,31 @@ package clipboard
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"maps"
 	"math/rand/v2"
 	"strconv"
 	"sync"
 
+	"mutclip.server/pkg/proto"
+
 	"github.com/charmbracelet/log"
+	"github.com/google/uuid"
 )
 
-var activeClips sync.Map
+type ClipboardServer struct {
+	sync.Map
+}
 
 type ClipboardId = string
 
 type Clipboard struct {
-    content ClipboardContent
-    recv    chan ClipboardMessage
-    sends   map[chan ClipboardMessage]struct{}
+	ctx     context.Context
+    content Content
+    recv    chan proto.InMessage
+    sends   map[uuid.UUID]chan proto.OutMessage
 }
 
-type ClipboardContent interface{}
+type Content interface{}
 
 type ContentText struct {
     data string
@@ -37,26 +41,15 @@ type ContentFile struct {
     filename    string
 }
 
-type ClipboardMessage struct {
-    Binary bool
-    Data   []byte
-}
-
-type MessageText struct {
-    Data string `json:"data"`
-}
-
-type MessageFileHeader struct {
-    Filename  string `json:"filename"`
-    Type      string `json:"type"`
-    NumChunks int    `json:"num_chunks"`
+func NewServer() *ClipboardServer {
+	return &ClipboardServer{}
 }
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
-func Generate() ClipboardId {
+// TODO: check for uniqueness
+func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
     var parts []any
-
     for i := 0; i < 6; i++ {
         x := rand.N(len(alphabet) + 10)
         if x < len(alphabet) {
@@ -65,64 +58,117 @@ func Generate() ClipboardId {
             parts = append(parts, strconv.Itoa(x - len(alphabet)))
         }
     }
-
     id := fmt.Sprintf("%v%v-%v%v-%v%v", parts...)
-    initialize(id)
-    return id
-}
 
-func initialize(id ClipboardId) {
-    activeClips.Store(
+	log.Infof("generated %v", id)
+
+    s.Store(
         id,
         Clipboard{
+			ctx:     ctx,
             content: ContentText{},
-            recv:    make(chan ClipboardMessage),
+            recv:    make(chan proto.InMessage),
+			sends:   make(map[uuid.UUID]chan proto.OutMessage),
         },
     )
+
+	return id
 }
 
-func getClip(id ClipboardId) *Clipboard {
-    x, ok := activeClips.Load(id)
-    if !ok { panic("bad id") }
+func (s *ClipboardServer) getClip(id ClipboardId) *Clipboard {
+    x, ok := s.Load(id)
+    if !ok { return nil }
 
     clip, ok := x.(Clipboard)
-    if !ok { panic("impossible") }
+    if !ok { return nil }
 
     return &clip
 }
 
-func Connect(id ClipboardId, send chan ClipboardMessage) (recv chan ClipboardMessage, err error) {
-    defer func() {
-        r := recover()
-        if r != nil {
-            e, ok := r.(string)
-            if ok { err = errors.New(e) }
-        }
-    }()
+func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan proto.OutMessage) (chan proto.InMessage, uuid.UUID, error) {
+    clip := s.getClip(id)
+	if clip == nil {
+		return nil, uuid.UUID{}, fmt.Errorf("invalid id: %v", id)
+	}
 
-    clip := getClip(id)
+	sid := uuid.New()
 
-    clip.sends[send] = struct{}{}
-    recv = clip.recv
+    clip.sends[sid] = send
 
-    return
+	// TODO: send content
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-clip.ctx.Done():
+		}
+
+		delete(clip.sends, sid)
+        log.Infof("%v disconnected from %v", sid, id)
+	}()
+
+	log.Infof("%v connected to %v", sid, id)
+
+    return clip.recv, sid, nil
 }
 
-func Broadcast(id ClipboardId, msg ClipboardMessage) {
-    for s := range maps.Keys(getClip(id).sends) {
-        s <- msg
+func (s *ClipboardServer) broadcast(id ClipboardId, msg proto.OutMessage) {
+    for _, c := range s.getClip(id).sends {
+        c <- msg
     }
 }
 
-func Run(id ClipboardId, ctx context.Context) {
+func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg proto.OutMessage) {
+	c, ok := s.getClip(id).sends[sid]
+	if !ok {
+		log.Errorf("invalid sid: %v", sid)
+		return
+	}
+
+	c <- msg
+}
+
+func (s *ClipboardServer) processText(msg *proto.MessageText) {
+
+}
+
+func (s *ClipboardServer) processFile(msg *proto.MessageFileHeader) {
+
+}
+
+// TODO: make cleanup
+func (s *ClipboardServer) Start(id ClipboardId) {
+	log.Infof("started %v", id)
+
     for {
         select {
-        case msg := <-getClip(id).recv:
-            log.Info(msg)
+        case msg := <-s.getClip(id).recv:
+			if msg.Binary {
+				log.Errorf("first message should be text: %v", msg.Data)
+				s.reply(id, msg.SID, proto.Errf("unexpected message"))
+				continue
+			}
 
-            
-        case <-ctx.Done():
-            return
-        }
+			text, err := proto.ParseText(msg)
+			if err == nil {
+				log.Infof("got text message: %v", text)
+				s.processText(text)
+				continue
+			}
+
+			hdr, err := proto.ParseHdr(msg)
+			if err == nil {
+				log.Infof("got file header: %v", hdr)
+				s.processFile(hdr)
+				continue
+			}
+
+			log.Errorf("got message of unknown type: %v", msg)
+			s.reply(id, msg.SID, proto.Errf("unexpected message"))
+
+		case <-s.getClip(id).ctx.Done():
+			log.Infof("finished %v", id)
+			return
+		}
     }
 }
