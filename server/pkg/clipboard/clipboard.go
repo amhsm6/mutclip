@@ -67,7 +67,7 @@ func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
         Clipboard{
 			ctx:     ctx,
             content: ContentText{},
-            recv:    make(chan proto.InMessage),
+            recv:    make(chan proto.InMessage, 15),
 			sends:   make(map[uuid.UUID]chan proto.OutMessage),
         },
     )
@@ -85,6 +85,12 @@ func (s *ClipboardServer) getClip(id ClipboardId) *Clipboard {
     return &clip
 }
 
+func (s *ClipboardServer) updateClip(id ClipboardId, f func(*Clipboard)) {
+    clip := s.getClip(id)
+    f(clip)
+    s.Store(id, *clip)
+}
+
 func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan proto.OutMessage) (chan proto.InMessage, uuid.UUID, error) {
     clip := s.getClip(id)
 	if clip == nil {
@@ -95,7 +101,10 @@ func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan
 
     clip.sends[sid] = send
 
-	// TODO: send content
+    err := s.send(id, sid)
+    if err != nil {
+        panic(err)
+    }
 
 	go func() {
 		select {
@@ -112,27 +121,45 @@ func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan
     return clip.recv, sid, nil
 }
 
-func (s *ClipboardServer) broadcast(id ClipboardId, msg proto.OutMessage) {
-    for _, c := range s.getClip(id).sends {
-        c <- msg
-    }
-}
-
-func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg proto.OutMessage) {
+func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg proto.OutMessage) error {
 	c, ok := s.getClip(id).sends[sid]
 	if !ok {
-		log.Errorf("invalid sid: %v", sid)
-		return
+        return fmt.Errorf("invalid sid: %v", sid)
 	}
 
 	c <- msg
+    return nil
 }
 
-func (s *ClipboardServer) processText(msg *proto.MessageText) {
-
+func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
+    switch content := s.getClip(id).content.(type) {
+    case ContentText:
+        return s.reply(id, sid, proto.Text(content.data))
+    
+    case ContentFile:
+        panic("unimplemented")
+    
+    default:
+        panic("impossible")
+    }
 }
 
-func (s *ClipboardServer) processFile(msg *proto.MessageFileHeader) {
+func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, msg *proto.MessageText) {
+    s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{ data: msg.Data } })
+
+    for sid2 := range s.getClip(id).sends {
+        if sid2 == sid { continue }
+
+        err := s.send(id, sid2)
+        if err != nil {
+            panic(err)
+        }
+    }
+
+    s.reply(id, sid, proto.Ack())
+}
+
+func (s *ClipboardServer) processFile(id ClipboardId, msg *proto.MessageFileHeader) {
 
 }
 
@@ -152,14 +179,14 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 			text, err := proto.ParseText(msg)
 			if err == nil {
 				log.Infof("got text message: %v", text)
-				s.processText(text)
+				s.processText(id, msg.SID, text)
 				continue
 			}
 
 			hdr, err := proto.ParseHdr(msg)
 			if err == nil {
 				log.Infof("got file header: %v", hdr)
-				s.processFile(hdr)
+				s.processFile(id, hdr)
 				continue
 			}
 

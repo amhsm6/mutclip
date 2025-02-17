@@ -33,6 +33,10 @@ type MessageFileHeader struct {
     NumChunks   int    `json:"num_chunks"`
 }
 
+type MessageAck struct {
+	Type string `json:"type"`
+}
+
 type MessageError struct {
 	Type string `json:"type"`
 	Desc string `json:"desc"`
@@ -41,6 +45,7 @@ type MessageError struct {
 const (
 	MSG_TEXT = "MSG_TEXT"
 	MSG_HDR  = "MSG_HDR"
+	MSG_ACK  = "MSG_ACK"
 	MSG_ERR  = "MSG_ERR"
 )
 
@@ -87,6 +92,11 @@ func serializeJSON(msg any) OutMessage {
 
 func Text(text string) OutMessage {
 	msg := MessageText{ Type: MSG_TEXT, Data: text }
+	return serializeJSON(msg)
+}
+
+func Ack() OutMessage {
+	msg := MessageAck{ Type: MSG_ACK }
 	return serializeJSON(msg)
 }
 
