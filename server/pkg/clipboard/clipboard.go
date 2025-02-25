@@ -7,7 +7,8 @@ import (
 	"strconv"
 	"sync"
 
-	"mutclip.server/pkg/proto"
+	"mutclip/pkg/msg"
+	pb "mutclip/pkg/pb/clip"
 
 	"github.com/charmbracelet/log"
 	"github.com/google/uuid"
@@ -22,8 +23,8 @@ type ClipboardId = string
 type Clipboard struct {
 	ctx     context.Context
     content Content
-    recv    chan proto.InMessage
-    sends   map[uuid.UUID]chan proto.OutMessage
+    recv    chan msg.InMessage
+    sends   map[uuid.UUID]chan msg.OutMessage
 }
 
 type Content interface{}
@@ -67,8 +68,8 @@ func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
         Clipboard{
 			ctx:     ctx,
             content: ContentText{},
-            recv:    make(chan proto.InMessage, 15),
-			sends:   make(map[uuid.UUID]chan proto.OutMessage),
+            recv:    make(chan msg.InMessage, 15),
+			sends:   make(map[uuid.UUID]chan msg.OutMessage),
         },
     )
 
@@ -91,7 +92,7 @@ func (s *ClipboardServer) updateClip(id ClipboardId, f func(*Clipboard)) {
     s.Store(id, *clip)
 }
 
-func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan proto.OutMessage) (chan proto.InMessage, uuid.UUID, error) {
+func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan msg.OutMessage) (chan msg.InMessage, uuid.UUID, error) {
     clip := s.getClip(id)
 	if clip == nil {
 		return nil, uuid.UUID{}, fmt.Errorf("invalid id: %v", id)
@@ -121,7 +122,7 @@ func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan
     return clip.recv, sid, nil
 }
 
-func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg proto.OutMessage) error {
+func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg msg.OutMessage) error {
 	c, ok := s.getClip(id).sends[sid]
 	if !ok {
         return fmt.Errorf("invalid sid: %v", sid)
@@ -134,7 +135,7 @@ func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg proto.OutMess
 func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
     switch content := s.getClip(id).content.(type) {
     case ContentText:
-        return s.reply(id, sid, proto.Text(content.data))
+        return s.reply(id, sid, msg.Out(&pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: content.data } } }))
     
     case ContentFile:
         panic("unimplemented")
@@ -144,22 +145,24 @@ func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
     }
 }
 
-func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, msg *proto.MessageText) {
-    s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{ data: msg.Data } })
+func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, m *pb.Text) {
+	log.Infof("got text message: %v", m.Data)
+
+    s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{ data: m.Data } })
 
     for sid2 := range s.getClip(id).sends {
         if sid2 == sid { continue }
 
         err := s.send(id, sid2)
         if err != nil {
-            panic(err)
+			log.Error(err)
         }
     }
 
-    s.reply(id, sid, proto.Ack())
+    s.reply(id, sid, msg.Out(&pb.Message{ Msg: &pb.Message_Ack{} }))
 }
 
-func (s *ClipboardServer) processFile(id ClipboardId, msg *proto.MessageFileHeader) {
+func (s *ClipboardServer) processFile(id ClipboardId, msg *pb.FileHeader) {
 
 }
 
@@ -169,29 +172,19 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 
     for {
         select {
-        case msg := <-s.getClip(id).recv:
-			if msg.Binary {
-				log.Errorf("first message should be text: %v", msg.Data)
-				s.reply(id, msg.SID, proto.Errf("unexpected message"))
+        case m := <-s.getClip(id).recv:
+			if text := m.GetText(); text != nil {
+				s.processText(id, m.SID, text)
 				continue
 			}
 
-			text, err := proto.ParseText(msg)
-			if err == nil {
-				log.Infof("got text message: %v", text)
-				s.processText(id, msg.SID, text)
-				continue
-			}
-
-			hdr, err := proto.ParseHdr(msg)
-			if err == nil {
-				log.Infof("got file header: %v", hdr)
+			if hdr := m.GetHdr(); hdr != nil {
 				s.processFile(id, hdr)
 				continue
 			}
 
-			log.Errorf("got message of unknown type: %v", msg)
-			s.reply(id, msg.SID, proto.Errf("unexpected message"))
+			log.Errorf("unexpected message: %v", m)
+			s.reply(id, m.SID, msg.Err(fmt.Errorf("unpexpected message")))
 
 		case <-s.getClip(id).ctx.Done():
 			log.Infof("finished %v", id)

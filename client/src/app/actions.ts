@@ -13,8 +13,7 @@ export async function newclip() {
 }
 
 export async function connect(input: string) {
-    const id = input.slice(0, 3) + "-" + input.slice(3, 6) + "-" + input.slice(6, 9);
-
+    const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
     const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/check/${id}`, { cache: "no-store" });
 
     if (resp.ok) {

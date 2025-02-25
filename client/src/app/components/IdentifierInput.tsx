@@ -22,7 +22,7 @@ export default function IndetifierInput() {
     useEffect(() => {
         setNotFound(false);
 
-        if (input.length === 9) {
+        if (input.length === 6) {
             connect(input)
                 .then(setNotFound)
                 .catch(err => setError(err));
@@ -32,7 +32,7 @@ export default function IndetifierInput() {
     return (
         <div className={ styles.container }>
             <div className={ styles.row }>
-                { [0, 1, 2].map(index => (
+                { [0, 1].map(index => (
                     <InputBox
                         key={ index }
                         index={ index }
@@ -43,7 +43,7 @@ export default function IndetifierInput() {
                     />
                 )) }
                 <h1>-</h1>
-                { [3, 4, 5].map(index => (
+                { [2, 3].map(index => (
                     <InputBox
                         key={ index }
                         index={ index }
@@ -54,7 +54,7 @@ export default function IndetifierInput() {
                     />
                 )) }
                 <h1>-</h1>
-                { [6, 7, 8].map(index => (
+                { [4, 5].map(index => (
                     <InputBox
                         key={ index }
                         index={ index }
@@ -62,7 +62,7 @@ export default function IndetifierInput() {
                         set={ c => { setInput(input + c); setCursor(cursor + 1); } }
                         clear={ () => { setInput(input.slice(0, input.length - 1)); setCursor(cursor - 1); } }
                         notFound={ notFound }
-                        forceLast={ index === 8 && cursor === 9 }
+                        forceLast={ index === 5 && cursor === 6 }
                     />
                 )) }
             </div>

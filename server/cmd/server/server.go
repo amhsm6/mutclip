@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-    
-	"mutclip.server/pkg/clipboard"
-	"mutclip.server/pkg/proto"
+	"net/http"
+
+	"mutclip/pkg/clipboard"
+	"mutclip/pkg/msg"
 
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
@@ -18,7 +19,11 @@ func main() {
 
 	s := clipboard.NewServer()
 
-    upgrader := websocket.Upgrader{}
+    upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { //FIXME
+			return true
+		},
+	}
 
     r.GET("/", func(ctx *gin.Context) {
         ctx.Header("Content-Type", "text/html")
@@ -38,7 +43,7 @@ func main() {
     })
 
     r.GET("/newclip", func(ctx *gin.Context) {
-        id := s.Generate(ctx.Request.Context())
+        id := s.Generate(ctx)
 
 		go s.Start(id)
 
@@ -46,10 +51,19 @@ func main() {
         ctx.String(200, id)
     })
 
+    r.GET("/check/:id", func(ctx *gin.Context) {
+		id := ctx.Param("id")
+		if _, ok := s.Load(id); ok {
+			ctx.Status(200)
+		} else {
+			ctx.Status(404)
+		}
+    })
+
     r.GET("/ws/:id", func(gctx *gin.Context) {
         id := gctx.Param("id")
 
-        ctx, cancel := context.WithCancel(gctx.Request.Context())
+        ctx, cancel := context.WithCancel(gctx.Request.Context());
 
         c, err := upgrader.Upgrade(gctx.Writer, gctx.Request, nil)
         if err != nil {
@@ -66,14 +80,14 @@ func main() {
             }
         }()
 
-        send := make(chan proto.OutMessage)
+        send := make(chan msg.OutMessage, 15)
 
         recv, sid, err := s.Connect(id, ctx, send)
         if err != nil {
             cancel()
 
             log.Error(err)
-            c.WriteMessage(websocket.TextMessage, proto.Err(err).Data)
+            c.WriteMessage(websocket.BinaryMessage, msg.Err(err))
 
             return
         }
@@ -88,18 +102,24 @@ func main() {
                    return
                 }
 
-                switch typ { // FIXME: maybe constructors
-                case websocket.TextMessage:
-                    recv <- proto.InMessage{ Binary: false, SID: sid, Data: buf }
-
+                switch typ {
                 case websocket.BinaryMessage:
-                    recv <- proto.InMessage{ Binary: true, SID: sid, Data: buf }
+                    m, err := msg.In(sid, buf)
+					if err != nil {
+						log.Error(err) //TODO: reply?
+						continue
+					}
+
+					recv <- *m
 
                 case websocket.CloseMessage:
                     cancel()
 
-                    log.Error("websocket closed")
+                    log.Warn("websocket closed")
                     return
+
+				default:
+					log.Errorf("unexpected message of type %v: %v", typ, buf)
                 }
             }
         }()
@@ -107,11 +127,8 @@ func main() {
         go func() {
             for {
                 select {
-                case msg := <-send:
-					typ := websocket.TextMessage
-					if msg.Binary { typ = websocket.BinaryMessage }
-
-                    err := c.WriteMessage(typ, msg.Data)
+                case m := <-send:
+                    err := c.WriteMessage(websocket.BinaryMessage, m)
                     if err != nil {
                         cancel()
 
@@ -128,7 +145,7 @@ func main() {
         <-ctx.Done()
     })
 
-    log.Info("Starting Server")
+    log.Info("Starting Server on 127.0.0.1:3015")
 
     err := r.Run("127.0.0.1:3015")
     if err != nil {

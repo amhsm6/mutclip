@@ -2,41 +2,35 @@
 
 import { useState, useEffect, useContext, useRef } from "react";
 import MessageQueueContext from "@/contexts/MessageQueueContext";
-import { Contents, Chunk, MessageType } from "@/types/clipboard";
-import { io, Socket } from "socket.io-client";
+import { Contents, MessageType } from "@/types/clipboard";
+import { FileHeader, Message, Chunk } from "@/pb/clip";
 
 type FileBuffer = {
-    header: Header,
-    chunks: Chunk[],
+    header:    FileHeader,
+    chunks:    Chunk[],
     nextChunk: number
 };
 
-type Header = {
-    type: string,
-    name: string,
-    numChunks: number
-};
+//const cut = (data: Blob): Chunk[] => {
+    //const chunkSize = 500 * 1024;
+    //const numChunks = Math.ceil(data.size / chunkSize);
 
-const cut = (data: Blob): Chunk[] => {
-    const chunkSize = 500 * 1024;
-    const numChunks = Math.ceil(data.size / chunkSize);
+    //const chunks = [];
+    //for (let i = 0; i < numChunks; i++) {
+        //chunks.push({
+            //index: i,
+            //data: data.slice(i * chunkSize, i * chunkSize + chunkSize)
+        //});
+    //}
 
-    const chunks = [];
-    for (let i = 0; i < numChunks; i++) {
-        chunks.push({
-            index: i,
-            data: data.slice(i * chunkSize, i * chunkSize + chunkSize)
-        });
-    }
-
-    return chunks;
-};
+    //return chunks;
+//};
 
 type SocketState = {
     connected: boolean,
-    sending: boolean,
+    sending:   boolean,
     receiving: boolean,
-    error: Error | null
+    error:     Error | null
 };
 
 type Props = {
@@ -44,7 +38,7 @@ type Props = {
 };
 
 export function useSocketContents({ clipId }: Props) {
-    const socketRef = useRef<Socket | null>(null);
+    const socketRef = useRef<WebSocket | null>(null);
 
     const [contents, setContents] = useState<Contents & { incoming?: boolean }>({ type: "text", data: "" })
     const fileBufferRef = useRef<FileBuffer | null>(null);
@@ -61,89 +55,87 @@ export function useSocketContents({ clipId }: Props) {
     useEffect(() => {
         pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
 
-        const opts = { "auth": { "clip_id": clipId } };
-        const socket = process.env.NODE_ENV === "production" ? io(opts) : io(process.env.NEXT_PUBLIC_API_URL, opts);
+        const ws = new WebSocket(process.env.NODE_ENV === "production" ? `/ws/${clipId}` : `${process.env.NEXT_PUBLIC_API_URL}/ws/${clipId}`);
+        ws.binaryType = "arraybuffer";
 
-        socket.on("connect", () => {
+        ws.onopen = () => {
             setSocketState(s => ({ ...s, connected: true }));
             pushMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
-        });
+        };
 
-        socket.on("text", (data: string) => {
-            setContents({ type: "text", data, incoming: true });
-            fileBufferRef.current = null;
-
-            setSocketState(s => ({ ...s, receiving: false }));
-        });
-
-        socket.on("file", (header: Header) => {
-            fileBufferRef.current = {
-                header,
-                chunks: [],
-                nextChunk: 0
-            };
-
-            setSocketState(s => ({ ...s, receiving: true }));
-            pushMessage({ type: MessageType.INFO, text: `Receiving ${header.name}` });
-        });
-
-        socket.on("chunk", (chunk: Chunk, callback: (cont: boolean) => void) => {
-            if (!fileBufferRef.current) {
-                setSocketState(s => ({ ...s, receiving: false }));
-                callback(false);
+        ws.onmessage = msg => {
+            if (!(msg.data instanceof ArrayBuffer)) {
+                pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
                 return;
             }
 
-            if (fileBufferRef.current.nextChunk != chunk.index) {
+            const m = Message.decode(new Uint8Array(msg.data));
+
+            if (m.text) {
+                setContents({ type: "text", data: m.text.data, incoming: true });
                 fileBufferRef.current = null;
-                callback(false);
-                setSocketState(s => ({ ...s, error: new Error("Internal Server Error") }));
-                return;
+
+                setSocketState(s => ({ ...s, receiving: false }));
+            } else if (m.hdr) {
+                fileBufferRef.current = {
+                    header: m.hdr,
+                    chunks: [],
+                    nextChunk: 0
+                };
+
+                setSocketState(s => ({ ...s, receiving: true }));
+                pushMessage({ type: MessageType.INFO, text: `Receiving ${m.hdr.filename}` });
+            } else if (m.chunk) {
+        //    if (!fileBufferRef.current) {
+        //        setSocketState(s => ({ ...s, receiving: false }));
+        //        callback(false);
+        //        return;
+        //    }
+
+        //    if (fileBufferRef.current.nextChunk != chunk.index) {
+        //        fileBufferRef.current = null;
+        //        callback(false);
+        //        setSocketState(s => ({ ...s, error: new Error("Internal Server Error") }));
+        //        return;
+        //    }
+
+        //    fileBufferRef.current.chunks.push(chunk);
+        //    fileBufferRef.current.nextChunk++;
+
+        //    if (fileBufferRef.current.nextChunk < fileBufferRef.current.header.numChunks) {
+        //        callback(true);
+        //        return;
+        //    }
+
+        //    const data = new Blob(fileBufferRef.current.chunks.map(chunk => chunk.data));
+
+        //    setContents({
+        //        type: "file",
+        //        contentType: fileBufferRef.current.header.type,
+        //        filename: fileBufferRef.current.header.name,
+        //        data,
+        //        chunks: fileBufferRef.current.chunks,
+        //        incoming: true
+        //    });
+
+        //    fileBufferRef.current = null;
+
+        //    setSocketState(s => ({ ...s, receiving: false }));
+        //    callback(false);
+            } else if (m.ack) {
+                setSocketState(s => ({ ...s, sending: false }));
+            } else if (m.err) {
+                pushMessage({ type: MessageType.ERROR, text: m.err.desc });
+                //    setSocketState(s => ({ ...s, error: new Error("Internal Server Error") })); TODO?
+            } else {
+                pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
             }
+        };
 
-            fileBufferRef.current.chunks.push(chunk);
-            fileBufferRef.current.nextChunk++;
-
-            if (fileBufferRef.current.nextChunk < fileBufferRef.current.header.numChunks) {
-                callback(true);
-                return;
-            }
-
-            const data = new Blob(fileBufferRef.current.chunks.map(chunk => chunk.data));
-
-            setContents({
-                type: "file",
-                contentType: fileBufferRef.current.header.type,
-                filename: fileBufferRef.current.header.name,
-                data,
-                chunks: fileBufferRef.current.chunks,
-                incoming: true
-            });
-
-            fileBufferRef.current = null;
-
-            setSocketState(s => ({ ...s, receiving: false }));
-            callback(false);
-        });
-
-        socket.on("sync", () => {
-            setSocketState(s => ({ ...s, sending: false }));
-        });
-        
-        socket.on("noclipboard", () => {
-            socket.disconnect();
-            socketRef.current = null;
-            setSocketState(s => ({ ...s, connected: false, error: new Error("This clipboard does not exist") }));
-        });
-
-        socket.on("error", () => {
-            setSocketState(s => ({ ...s, error: new Error("Internal Server Error") }));
-        });
-
-        socketRef.current = socket;
+        socketRef.current = ws;
 
         return () => {
-            socket.disconnect();
+            ws.close();
             socketRef.current = null;
             setSocketState(s => ({ ...s, connected: false }));
         };
@@ -151,25 +143,29 @@ export function useSocketContents({ clipId }: Props) {
 
     useEffect(() => {
         const socket = socketRef.current;
-        if (!socket || !socket.connected || contents.incoming) { return; }
+        if (!socket || socket.readyState != WebSocket.OPEN || contents.incoming) { return; }
 
         const timeout = setTimeout(() => {
             setSocketState(s => ({ ...s, sending: true }));
 
             if (contents.type === "text") {
-                socket.emit("text", contents.data);
+                const m = Message.create({
+                    text: { data: contents.data }
+                });
+            
+                socket.send(Message.encode(m).finish());
             } else {
-                socket.emit("file", { type: contents.contentType, name: contents.filename, numChunks: contents.chunks.length });
+                //socket.emit("file", { type: contents.contentType, name: contents.filename, numChunks: contents.chunks.length });
 
-                const send = (index: number) => {
-                    if (index >= contents.chunks.length) { return; }
+                //const send = (index: number) => {
+                //    if (index >= contents.chunks.length) { return; }
 
-                    socket.emit("chunk", contents.chunks[index], (cont: boolean) => {
-                        if (cont) { send(index + 1); }
-                    });
-                };
+                //    socket.emit("chunk", contents.chunks[index], (cont: boolean) => {
+                //        if (cont) { send(index + 1); }
+                //    });
+                //};
 
-                send(0);
+                //send(0);
             }
         }, 500);
 
@@ -182,7 +178,9 @@ export function useSocketContents({ clipId }: Props) {
 
         setSocketState(s => ({ ...s, sending: false, receiving: false }));
 
-        socket.emit("text", "");
+        const m = Message.create({ text: { data: "" } });
+        socket.send(Message.encode(m).finish());
+
         setContents({ type: "text", data: "", incoming: true });
         fileBufferRef.current = null;
     };
@@ -207,7 +205,7 @@ export function useSocketContents({ clipId }: Props) {
 
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type;
             const data = new Blob([res]);
-            const chunks = cut(data);
+            const chunks: Chunk[] = []//cut(data);
 
             setContents({
                 type: "file",
