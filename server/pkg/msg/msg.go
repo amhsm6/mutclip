@@ -8,32 +8,33 @@ import (
 )
 
 type InMessage struct {
-	SID uuid.UUID
 	*pb.Message
+
+	SID uuid.UUID
 }
 
-type OutMessage = []byte
+type OutMessage = *pb.Message
 
-func In(sid uuid.UUID, data []byte) (*InMessage, error) {
+func In(sid uuid.UUID, b []byte) (*InMessage, error) {
 	m := &pb.Message{}
 
-	err := proto.Unmarshal(data, m)
+	err := proto.Unmarshal(b, m)
 	if err != nil {
 		return nil, err
 	}
 
-	return &InMessage{ sid, m }, nil
+	return &InMessage{ SID: sid, Message: m }, nil
 }
 
-func Out(m *pb.Message) OutMessage {
-	data, err := proto.Marshal(m)
+func Out(m OutMessage) []byte {
+	b, err := proto.Marshal(m)
 	if err != nil {
 		panic(err)
 	}
 
-	return data
+	return b
 }
 
 func Err(err error) OutMessage {
-	return Out(&pb.Message{ Msg: &pb.Message_Err{ Err: &pb.Error{ Desc: err.Error() } } })
+	return &pb.Message{ Msg: &pb.Message_Err{ Err: &pb.Error{ Desc: err.Error() } } }
 }

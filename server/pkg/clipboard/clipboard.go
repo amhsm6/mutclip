@@ -135,7 +135,7 @@ func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg msg.OutMessag
 func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
     switch content := s.getClip(id).content.(type) {
     case ContentText:
-        return s.reply(id, sid, msg.Out(&pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: content.data } } }))
+        return s.reply(id, sid, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: content.data } } })
     
     case ContentFile:
         panic("unimplemented")
@@ -159,7 +159,7 @@ func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, m *pb.Text)
         }
     }
 
-    s.reply(id, sid, msg.Out(&pb.Message{ Msg: &pb.Message_Ack{} }))
+    s.reply(id, sid, &pb.Message{ Msg: &pb.Message_Ack{ Ack: &pb.Ack{} } })
 }
 
 func (s *ClipboardServer) processFile(id ClipboardId, msg *pb.FileHeader) {

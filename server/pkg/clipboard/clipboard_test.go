@@ -9,7 +9,6 @@ import (
 	pb "mutclip/pkg/pb/clip"
 
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestId(t *testing.T) {
@@ -83,114 +82,50 @@ func TestBasic(t *testing.T) {
 	}
 
 	m := <-send1
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "" {
-			t.Fatalf("expected initial empty message for send1, but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "" {
+        t.Fatalf("expected initial empty message for send1, but got: %v", m)
+    }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
+    if m.GetText() == nil || m.GetText().Data != "" {
+        t.Fatalf("expected initial empty message for send2 but got: %v", m)
+    }
 
-		if out.GetText() == nil || out.GetText().Data != "" {
-			t.Fatalf("expected initial empty message for send2 but got: %v", out)
-		}
-	}
-
-	recv <- msg.InMessage{ sid2, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "hello, world" } } } }
+	recv <- msg.InMessage{ SID: sid2, Message: &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "hello, world" } } } }
 
 	m = <-send1
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "hello, world" {
-			t.Fatalf("expected message for send1 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "hello, world" {
+        t.Fatalf("expected message for send1 but got: %v", m)
+    }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
+    if m.GetAck() == nil {
+        t.Fatalf("expected ack for send2 but got: %v", m)
+    }
 
-		if out.GetAck() == nil {
-			t.Fatalf("expected ack for send2 but got: %v", out)
-		}
-	}
-
-	recv <- msg.InMessage{ sid2, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "new message" } } } }
+	recv <- msg.InMessage{ SID: sid2, Message: &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "new message" } } } }
 
 	m = <-send1
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "new message" {
-			t.Fatalf("expected message for send1 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "new message" {
+        t.Fatalf("expected message for send1 but got: %v", m)
+    }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
+    if m.GetAck() == nil {
+        t.Fatalf("expected ack for send2 but got: %v", m)
+    }
 
-		if out.GetAck() == nil {
-			t.Fatalf("expected ack for send2 but got: %v", out)
-		}
-	}
-
-	recv <- msg.InMessage{ sid2, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "another" } } } }
+	recv <- msg.InMessage{ SID: sid2, Message: &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "another" } } } }
 
 	m = <-send1
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "another" {
-			t.Fatalf("expected message for send1 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "another" {
+        t.Fatalf("expected message for send1 but got: %v", m)
+    }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetAck() == nil {
-			t.Fatalf("expected ack for send2 but got: %v", out)
-		}
-	}
+    if m.GetAck() == nil {
+        t.Fatalf("expected ack for send2 but got: %v", m)
+    }
 
 	_, send3, sid3, err, cancel3 := connect(t, s, id, ctx)
 	if err != nil {
@@ -198,136 +133,63 @@ func TestBasic(t *testing.T) {
 	}
 
 	m = <-send3
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
+    if m.GetText() == nil || m.GetText().Data != "another" {
+        t.Fatalf("expected message for send3 but got: %v", m)
+    }
 
-		if out.GetText() == nil || out.GetText().Data != "another" {
-			t.Fatalf("expected message for send3 but got: %v", out)
-		}
-	}
-
-	recv <- msg.InMessage{ sid3, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "HI" } } } }
+	recv <- msg.InMessage{ SID: sid3, Message: &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "HI" } } } }
 
 	m = <-send1
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "HI" {
-			t.Fatalf("expected message for send3 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "HI" {
+        t.Fatalf("expected message for send3 but got: %v", m)
+    }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "HI" {
-			t.Fatalf("expected message for send2 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "HI" {
+        t.Fatalf("expected message for send2 but got: %v", m)
+    }
 
 	m = <-send3
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
+    if m.GetAck() == nil {
+        t.Fatalf("expected ack for send3 but got: %v", m)
+    }
 
-		if out.GetAck() == nil {
-			t.Fatalf("expected ack for send3 but got: %v", out)
-		}
-	}
+	recv <- msg.InMessage{ SID: sid1, Message: &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "bye" } } } }
 
-	recv <- msg.InMessage{ sid1, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "bye" } } } }
-
-	m = <-send1
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetAck() == nil {
-			t.Fatalf("expected ack for send1 but got: %v", out)
-		}
-	}
+    if m.GetAck() == nil {
+        t.Fatalf("expected ack for send1 but got: %v", m)
+    }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "bye" {
-			t.Fatalf("expected message for send2 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "bye" {
+        t.Fatalf("expected message for send2 but got: %v", m)
+    }
 
 	m = <-send3
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "bye" {
-			t.Fatalf("expected message for send3 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "bye" {
+        t.Fatalf("expected message for send3 but got: %v", m)
+    }
 
 	cancel1()
 
-	recv <- msg.InMessage{ sid2, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "Oh" } } } }
+	recv <- msg.InMessage{ SID: sid2, Message: &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: "Oh" } } } }
 
 	m = <-send2
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetAck() == nil {
-			t.Fatalf("expected ack for send2 but got: %v", out)
-		}
-	}
+    if m.GetAck() == nil {
+        t.Fatalf("expected ack for send2 but got: %v", m)
+    }
 
 	m = <-send3
-	{
-		out := &pb.Message{}
-		err := proto.Unmarshal(m, out)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if out.GetText() == nil || out.GetText().Data != "Oh" {
-			t.Fatalf("expected message for send3 but got: %v", out)
-		}
-	}
+    if m.GetText() == nil || m.GetText().Data != "Oh" {
+        t.Fatalf("expected message for send3 but got: %v", m)
+    }
 
 	cancel()
 
 	time.Sleep(time.Second)
 
 	<-ctx.Done()
-	cancel1()
 	cancel2()
 	cancel3()
+	cancel()
 }

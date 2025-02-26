@@ -87,8 +87,7 @@ func main() {
             cancel()
 
             log.Error(err)
-            c.WriteMessage(websocket.BinaryMessage, msg.Err(err))
-
+            c.WriteMessage(websocket.BinaryMessage, msg.Out(msg.Err(err)))
             return
         }
 
@@ -106,7 +105,7 @@ func main() {
                 case websocket.BinaryMessage:
                     m, err := msg.In(sid, buf)
 					if err != nil {
-						log.Error(err) //TODO: reply?
+						log.Errorf("unable to parse protobuf message: %v", err) //TODO: reply?
 						continue
 					}
 
@@ -128,7 +127,7 @@ func main() {
             for {
                 select {
                 case m := <-send:
-                    err := c.WriteMessage(websocket.BinaryMessage, m)
+                    err := c.WriteMessage(websocket.BinaryMessage, msg.Out(m))
                     if err != nil {
                         cancel()
 
