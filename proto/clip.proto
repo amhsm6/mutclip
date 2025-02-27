@@ -9,8 +9,9 @@ message Message {
         Text text = 1;
         FileHeader hdr = 2;
         Chunk chunk = 3;
-        Ack ack = 4;
-        Error err = 5;
+        NextChunk nextChunk = 4;
+        Ack ack = 5;
+        Error err = 6;
     }
 }
 
@@ -28,6 +29,8 @@ message Chunk {
     int32 index = 1;
     bytes data = 2;
 }
+
+message NextChunk {}
 
 message Ack {}
 

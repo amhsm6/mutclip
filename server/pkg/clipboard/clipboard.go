@@ -34,12 +34,12 @@ type ContentText struct {
 }
 
 type ContentFile struct {
-    ready 		bool
-    chunks      [][]byte
-    nextChunkId int
-    numChunks   int
-    contentType string
-    filename    string
+    ready          bool
+    chunks         [][]byte
+    nextChunkIndex int
+    numChunks      int
+    contentType    string
+    filename       string
 }
 
 func NewServer() *ClipboardServer {
@@ -145,25 +145,97 @@ func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
     }
 }
 
-func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, m *pb.Text) {
-	log.Infof("got text message: %v", m.Data)
+func (s *ClipboardServer) sync(id ClipboardId, srcSID uuid.UUID) {
+    for sid := range s.getClip(id).sends {
+        if sid == srcSID { continue }
 
-    s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{ data: m.Data } })
-
-    for sid2 := range s.getClip(id).sends {
-        if sid2 == sid { continue }
-
-        err := s.send(id, sid2)
+        err := s.send(id, sid)
         if err != nil {
 			log.Error(err)
         }
     }
 
-    s.reply(id, sid, &pb.Message{ Msg: &pb.Message_Ack{ Ack: &pb.Ack{} } })
+    err := s.reply(id, srcSID, &pb.Message{ Msg: &pb.Message_Ack{ Ack: &pb.Ack{} } })
+    if err != nil {
+        log.Error(err)
+    }
 }
 
-func (s *ClipboardServer) processFile(id ClipboardId, msg *pb.FileHeader) {
+func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, m *pb.Text) {
+	log.Infof("got text message: %v", m.GetData())
 
+    s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{ data: m.GetData() } })
+    s.sync(id, sid)
+}
+
+// FIXME: if sending client disconnects - deadlock
+func (s *ClipboardServer) processFile(id ClipboardId, sid uuid.UUID, m *pb.FileHeader) {
+    if file, ok := s.getClip(id).content.(ContentFile); ok {
+        if !file.ready {
+            log.Error("file receiving in progress. refusing to received file %v", m.GetFilename())
+        }
+    }
+
+    log.Info("got file %v of type %v in %v chunks", m.GetFilename(), m.GetContentType(), m.GetNumChunks())
+
+    s.updateClip(id, func(clip *Clipboard) {
+		clip.content = ContentFile{
+			filename:    m.GetFilename(),
+			contentType: m.GetContentType(),
+			numChunks:   int(m.GetNumChunks()),
+		}
+	})
+
+	for {
+		select {
+		case m := <-s.getClip(id).recv:
+			chunk := m.GetChunk()
+			if chunk == nil {
+				log.Errorf("unexpected message while receiving file: %v", m)
+				s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message"))) //TODO: ask client to restart?
+				return
+			}
+
+			file, ok := s.getClip(id).content.(ContentFile)
+			if !ok {
+				log.Error("receiving file aborted")
+				return
+			}
+
+			if int(chunk.GetIndex()) != file.nextChunkIndex {
+                log.Errorf("received wrong chunk with index %v. expected %v", chunk.GetIndex(), file.nextChunkIndex)
+				s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message"))) //TODO: ask client to resend?
+				return
+            }
+
+            log.Info("got chunk %v of %v for %v", chunk.GetIndex(), file.numChunks, file.filename)
+
+            s.updateClip(id, func(clip *Clipboard) {
+                file, ok := clip.content.(ContentFile)
+                if !ok {
+                    log.Error("receiving file aborted")
+                    return
+                }
+
+                file.nextChunkIndex++
+                file.chunks = append(file.chunks, chunk.GetData())
+
+                if file.nextChunkIndex < file.numChunks {
+                    clip.content = file
+                    s.reply(id, sid, &pb.Message{ Msg: &pb.Message_NextChunk{ NextChunk: &pb.NextChunk{} } })
+                    return
+                }
+
+                file.ready = true
+                clip.content = file
+
+                s.sync(id, sid)
+            })
+		
+		case <-s.getClip(id).ctx.Done():
+			return
+		}
+	}
 }
 
 // TODO: make cleanup
@@ -179,7 +251,7 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 			}
 
 			if hdr := m.GetHdr(); hdr != nil {
-				s.processFile(id, hdr)
+				s.processFile(id, m.SID, hdr)
 				continue
 			}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 )
-
 
 func main() {
     err := godotenv.Load()
@@ -46,7 +46,6 @@ func main() {
 
 		go s.Start(id)
 
-        ctx.Header("Content-Type", "text/html")
         ctx.String(200, id)
     })
 
@@ -104,7 +103,8 @@ func main() {
                 case websocket.BinaryMessage:
                     m, err := msg.In(sid, buf)
 					if err != nil {
-						log.Errorf("unable to parse protobuf message: %v", err) //TODO: reply?
+						log.Errorf("unable to parse protobuf message: %v", err)
+                        send <- msg.Err(fmt.Errorf("unexpected message"))
 						continue
 					}
 
@@ -118,6 +118,7 @@ func main() {
 
 				default:
 					log.Errorf("unexpected message of type %v: %v", typ, buf)
+                    send <- msg.Err(fmt.Errorf("unexpected message"))
                 }
             }
         }()

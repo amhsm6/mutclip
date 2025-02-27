@@ -26,6 +26,8 @@ init: init-client proto
 
 clean: clean-server clean-client clean-proto
 
+reproto: clean-proto proto
+
 .PHONY: proto
 proto:
 	mkdir -p client/src/pb

@@ -13,6 +13,7 @@ export interface Message {
   text?: Text | undefined;
   hdr?: FileHeader | undefined;
   chunk?: Chunk | undefined;
+  nextChunk?: NextChunk | undefined;
   ack?: Ack | undefined;
   err?: Error | undefined;
 }
@@ -32,6 +33,9 @@ export interface Chunk {
   data: Uint8Array;
 }
 
+export interface NextChunk {
+}
+
 export interface Ack {
 }
 
@@ -40,7 +44,7 @@ export interface Error {
 }
 
 function createBaseMessage(): Message {
-  return { text: undefined, hdr: undefined, chunk: undefined, ack: undefined, err: undefined };
+  return { text: undefined, hdr: undefined, chunk: undefined, nextChunk: undefined, ack: undefined, err: undefined };
 }
 
 export const Message: MessageFns<Message> = {
@@ -54,11 +58,14 @@ export const Message: MessageFns<Message> = {
     if (message.chunk !== undefined) {
       Chunk.encode(message.chunk, writer.uint32(26).fork()).join();
     }
+    if (message.nextChunk !== undefined) {
+      NextChunk.encode(message.nextChunk, writer.uint32(34).fork()).join();
+    }
     if (message.ack !== undefined) {
-      Ack.encode(message.ack, writer.uint32(34).fork()).join();
+      Ack.encode(message.ack, writer.uint32(42).fork()).join();
     }
     if (message.err !== undefined) {
-      Error.encode(message.err, writer.uint32(42).fork()).join();
+      Error.encode(message.err, writer.uint32(50).fork()).join();
     }
     return writer;
   },
@@ -99,11 +106,19 @@ export const Message: MessageFns<Message> = {
             break;
           }
 
-          message.ack = Ack.decode(reader, reader.uint32());
+          message.nextChunk = NextChunk.decode(reader, reader.uint32());
           continue;
         }
         case 5: {
           if (tag !== 42) {
+            break;
+          }
+
+          message.ack = Ack.decode(reader, reader.uint32());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
             break;
           }
 
@@ -124,6 +139,7 @@ export const Message: MessageFns<Message> = {
       text: isSet(object.text) ? Text.fromJSON(object.text) : undefined,
       hdr: isSet(object.hdr) ? FileHeader.fromJSON(object.hdr) : undefined,
       chunk: isSet(object.chunk) ? Chunk.fromJSON(object.chunk) : undefined,
+      nextChunk: isSet(object.nextChunk) ? NextChunk.fromJSON(object.nextChunk) : undefined,
       ack: isSet(object.ack) ? Ack.fromJSON(object.ack) : undefined,
       err: isSet(object.err) ? Error.fromJSON(object.err) : undefined,
     };
@@ -139,6 +155,9 @@ export const Message: MessageFns<Message> = {
     }
     if (message.chunk !== undefined) {
       obj.chunk = Chunk.toJSON(message.chunk);
+    }
+    if (message.nextChunk !== undefined) {
+      obj.nextChunk = NextChunk.toJSON(message.nextChunk);
     }
     if (message.ack !== undefined) {
       obj.ack = Ack.toJSON(message.ack);
@@ -157,6 +176,9 @@ export const Message: MessageFns<Message> = {
     message.text = (object.text !== undefined && object.text !== null) ? Text.fromPartial(object.text) : undefined;
     message.hdr = (object.hdr !== undefined && object.hdr !== null) ? FileHeader.fromPartial(object.hdr) : undefined;
     message.chunk = (object.chunk !== undefined && object.chunk !== null) ? Chunk.fromPartial(object.chunk) : undefined;
+    message.nextChunk = (object.nextChunk !== undefined && object.nextChunk !== null)
+      ? NextChunk.fromPartial(object.nextChunk)
+      : undefined;
     message.ack = (object.ack !== undefined && object.ack !== null) ? Ack.fromPartial(object.ack) : undefined;
     message.err = (object.err !== undefined && object.err !== null) ? Error.fromPartial(object.err) : undefined;
     return message;
@@ -385,6 +407,49 @@ export const Chunk: MessageFns<Chunk> = {
     const message = createBaseChunk();
     message.index = object.index ?? 0;
     message.data = object.data ?? new Uint8Array(0);
+    return message;
+  },
+};
+
+function createBaseNextChunk(): NextChunk {
+  return {};
+}
+
+export const NextChunk: MessageFns<NextChunk> = {
+  encode(_: NextChunk, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): NextChunk {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseNextChunk();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): NextChunk {
+    return {};
+  },
+
+  toJSON(_: NextChunk): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<NextChunk>, I>>(base?: I): NextChunk {
+    return NextChunk.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<NextChunk>, I>>(_: I): NextChunk {
+    const message = createBaseNextChunk();
     return message;
   },
 };
