@@ -55,7 +55,7 @@ export function useSocketContents({ clipId }: Props) {
     useEffect(() => {
         pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
 
-        const ws = new WebSocket(process.env.NODE_ENV === "production" ? `/ws/${clipId}` : `${process.env.NEXT_PUBLIC_API_URL}/ws/${clipId}`);
+        const ws = new WebSocket(`/ws/${clipId}`);
         ws.binaryType = "arraybuffer";
 
         ws.onopen = () => {

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"os"
 
 	"mutclip/pkg/clipboard"
 	"mutclip/pkg/msg"
@@ -10,37 +12,34 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 )
 
 
 func main() {
+    err := godotenv.Load()
+    if err != nil {
+        log.Error(err)
+        return
+    }
+
     gin.SetMode(gin.ReleaseMode)
     r := gin.Default()
 
 	s := clipboard.NewServer()
 
     upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { //FIXME
-			return true
+		CheckOrigin: func(r *http.Request) bool {
+            origin, err := url.Parse(r.Header.Get("Origin"))
+            if err != nil {
+                log.Error(err)
+                return false
+            }
+
+            host := origin.Hostname()
+            return host == "localhost" || host == os.Getenv("ORIGIN")
 		},
 	}
-
-    r.GET("/", func(ctx *gin.Context) {
-        ctx.Header("Content-Type", "text/html")
-        ctx.String(200, `
-            <!DOCTYPE html>
-            <html>
-            <body>
-            <script>
-                const ws = new WebSocket("/ws/123");
-
-                ws.onmessage = console.log
-                ws.onclose = console.log
-            </script>
-            </body>
-            </html>
-        `)
-    })
 
     r.GET("/newclip", func(ctx *gin.Context) {
         id := s.Generate(ctx)
@@ -144,10 +143,10 @@ func main() {
         <-ctx.Done()
     })
 
-    log.Info("Starting Server on 127.0.0.1:3015")
+    log.Infof("Starting Server on %v", os.Getenv("API_ENDPOINT"))
 
-    err := r.Run("127.0.0.1:3015")
+    err = r.Run(os.Getenv("API_ENDPOINT"))
     if err != nil {
-        log.Fatal(err)
+        log.Error(err)
     }
 }
