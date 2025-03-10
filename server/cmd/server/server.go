@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"mutclip/pkg/clipboard"
 	"mutclip/pkg/msg"
@@ -13,49 +14,50 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-    err := godotenv.Load()
-    if err != nil {
-        log.Error(err)
-        return
-    }
-
     gin.SetMode(gin.ReleaseMode)
     r := gin.Default()
 
-	s := clipboard.NewServer()
+    s := clipboard.NewServer()
+
+    origins := make(map[string]struct{})
+    for _, o := range strings.Split(os.Getenv("ORIGINS"), " ") {
+        origins[o] = struct{}{}
+    }
 
     upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
+        CheckOrigin: func(r *http.Request) bool {
             origin, err := url.Parse(r.Header.Get("Origin"))
             if err != nil {
                 log.Error(err)
                 return false
             }
 
-            host := origin.Hostname()
-            return host == "localhost" || host == os.Getenv("ORIGIN")
-		},
-	}
+            _, ok := origins[origin.Hostname()]
+            if !ok {
+                log.Errorf("origin %v denied", origin.Hostname())
+            }
+            return ok
+        },
+    }
 
     r.GET("/newclip", func(ctx *gin.Context) {
         id := s.Generate(ctx)
 
-		go s.Start(id)
+        go s.Start(id)
 
         ctx.String(200, id)
     })
 
     r.GET("/check/:id", func(ctx *gin.Context) {
-		id := ctx.Param("id")
-		if _, ok := s.Load(id); ok {
-			ctx.Status(200)
-		} else {
-			ctx.Status(404)
-		}
+        id := ctx.Param("id")
+        if _, ok := s.Load(id); ok {
+            ctx.Status(200)
+        } else {
+            ctx.Status(404)
+        }
     })
 
     r.GET("/ws/:id", func(gctx *gin.Context) {
@@ -102,13 +104,13 @@ func main() {
                 switch typ {
                 case websocket.BinaryMessage:
                     m, err := msg.In(sid, buf)
-					if err != nil {
-						log.Errorf("unable to parse protobuf message: %v", err)
+                    if err != nil {
+                        log.Errorf("unable to parse protobuf message: %v", err)
                         send <- msg.Err(fmt.Errorf("unexpected message"))
-						continue
-					}
+                        continue
+                    }
 
-					recv <- *m
+                    recv <- *m
 
                 case websocket.CloseMessage:
                     cancel()
@@ -116,8 +118,8 @@ func main() {
                     log.Warn("websocket closed")
                     return
 
-				default:
-					log.Errorf("unexpected message of type %v: %v", typ, buf)
+                default:
+                    log.Errorf("unexpected message of type %v: %v", typ, buf)
                     send <- msg.Err(fmt.Errorf("unexpected message"))
                 }
             }
@@ -144,9 +146,8 @@ func main() {
         <-ctx.Done()
     })
 
-    log.Infof("Starting Server on %v", os.Getenv("API_ENDPOINT"))
-
-    err = r.Run(os.Getenv("API_ENDPOINT"))
+    log.Infof("Server started on port 5000")
+    err := r.Run(":5000")
     if err != nil {
         log.Error(err)
     }

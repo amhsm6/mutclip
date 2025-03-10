@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-deploy
+  namespace: mutclip
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server
+  template:
+    metadata:
+      labels:
+        app: server
+    spec:
+      containers:
+      - name: server
+        image: localhost:31509/mutclip-server
+        resources:
+          limits:
+            memory: 128Mi
+            cpu: 500m
+        ports:
+        - containerPort: 5000
+        envFrom:
+          - secretRef:
+              name: env
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: mutclip
+spec:
+  selector:
+    app: server
+  ports:
+  - port: 5000
+    targetPort: 5000

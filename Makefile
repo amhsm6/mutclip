@@ -1,32 +1,13 @@
-.PHONY: server
-run-server:
-	go build -C server -o bin/ ./...
-	./server/bin/server
+build: proto build-server build-client
 
-build-server:
-	go build -C server -o bin/ -ldflags '-s -w' ./...
-
-clean-server:
-	rm -rf server/bin
-
-.PHONY: client
-run-client:
-	cd client; npm run dev
-
-build-client:
-	cd client; npm run build && npm run extract
-
-clean-client:
-	rm -rf client/dist.tar.gz client/node_modules
-
-init-client:
-	cd client; npm i
+deploy:
+	kubectl apply -f kube/namespace.yaml,kube
+	kubectl rollout restart deploy -n mutclip
 
 init: init-client proto
 
 clean: clean-server clean-client clean-proto
 
-reproto: clean-proto proto
 
 .PHONY: proto
 proto:
@@ -35,3 +16,30 @@ proto:
 
 clean-proto:
 	rm -rf server/pkg/pb client/src/pb
+
+reproto: clean-proto proto
+
+
+build-server:
+	docker build server -t localhost:31509/mutclip-server
+	docker push localhost:31509/mutclip-server
+
+dev-server:
+	set -a && . ./.env && set +a && cd server && CI=1 CLICOLOR_FORCE=1 air
+
+clean-server:
+	rm -rf server/bin
+
+
+build-client:
+	docker build client -t localhost:31509/mutclip-client
+	docker push localhost:31509/mutclip-client
+
+dev-client:
+	set -a && . ./.env && set +a && cd client; npm run dev
+
+init-client:
+	cd client && npm install
+
+clean-client:
+	rm -rf client/node_modules
