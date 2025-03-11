@@ -1,7 +1,6 @@
 build: proto build-server build-client
 
 deploy:
-	kubectl apply -f kube/namespace.yaml,kube
 	kubectl rollout restart deploy -n mutclip
 
 init: init-client proto

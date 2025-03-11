@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "extract": "cp -r .next/standalone dist && cp -r .next/static dist/.next && tar czvf dist.tar.gz dist && rm -rf dist"
+    "lint": "next lint"
   },
   "dependencies": {
     "clipboard": "^2.0.11",
