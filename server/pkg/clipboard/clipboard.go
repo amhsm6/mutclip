@@ -165,13 +165,13 @@ func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
 			}
 
 			if idx == content.numChunks - 1 {
-				log.Info("sync done")
+				log.Infof("sync done %v", sid)
 				return nil
 			}
 
 			select {
 			case m := <-s.getClip(id).recv:
-				if m.GetNextChunk() != nil {
+				if m.GetNextChunk() == nil || m.SID != sid {
 					return fmt.Errorf("unexpected message while sending file %v", content.filename)
 				}
 
@@ -188,16 +188,25 @@ func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
 }
 
 func (s *ClipboardServer) sync(id ClipboardId, srcSID uuid.UUID) {
+    wg := sync.WaitGroup{}
     for sid := range s.getClip(id).sends {
         if sid == srcSID { continue }
 
-		log.Infof("sync %v", sid)
+        wg.Add(1)
 
-        err := s.send(id, sid)
-        if err != nil {
-			log.Error(err)
-        }
+        go func() {
+            defer wg.Done()
+
+            log.Infof("sync %v", sid)
+
+            err := s.send(id, sid)
+            if err != nil {
+                log.Error(err)
+            }
+        }()
     }
+
+    wg.Wait()
 
     err := s.reply(id, srcSID, &pb.Message{ Msg: &pb.Message_Ack{ Ack: &pb.Ack{} } })
     if err != nil {
@@ -235,19 +244,20 @@ func (s *ClipboardServer) processFile(id ClipboardId, sid uuid.UUID, m *pb.FileH
 		}
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
+    done := make(chan struct{}, 1)
+
+    ctx, cancel := context.WithCancel(s.getClip(id).ctx)
+    defer cancel()
 
 	recvloop:
 	for {
 		select {
 		case m := <-s.getClip(id).recv:
 			chunk := m.GetChunk()
-			if chunk == nil {
-				cancel()
+			if chunk == nil || m.SID != sid {
+				log.Errorf("unexpected message while receiving file")
 
-				log.Errorf("unexpected message while receiving file: %v", m)
-
-				err := s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message"))) //TODO: ask client to restart?
+				err := s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message")))
 				if err != nil {
 					log.Error(err)
 				}
@@ -257,18 +267,14 @@ func (s *ClipboardServer) processFile(id ClipboardId, sid uuid.UUID, m *pb.FileH
 
 			file, ok := s.getClip(id).content.(ContentFile)
 			if !ok {
-				cancel()
-
-				log.Error("receiving file aborted")
+				log.Error("file transmission aborted")
 				return
 			}
 
 			if int(chunk.GetIndex()) != file.nextChunkIndex {
-				cancel()
-
                 log.Errorf("received wrong chunk with index %v. expected %v", chunk.GetIndex(), file.nextChunkIndex)
 
-				err := s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message"))) //TODO: ask client to resend?
+				err := s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message")))
 				if err != nil {
 					log.Error(err)
 				}
@@ -281,7 +287,7 @@ func (s *ClipboardServer) processFile(id ClipboardId, sid uuid.UUID, m *pb.FileH
             s.updateClip(id, func(clip *Clipboard) {
                 file, ok := clip.content.(ContentFile)
                 if !ok {
-					cancel()
+                    cancel()
 
                     log.Error("receiving file aborted")
                     return
@@ -306,19 +312,16 @@ func (s *ClipboardServer) processFile(id ClipboardId, sid uuid.UUID, m *pb.FileH
 
 				log.Infof("done file %v", file.filename)
 
-				cancel()
+                done <- struct{}{}
             })
+
+        case <-done:
+            break recvloop
 		
 		case <-ctx.Done():
-			break recvloop
-
-		case <-s.getClip(id).ctx.Done():
-			cancel()
 			return
 		}
 	}
-
-	cancel()
 
 	s.sync(id, sid)
 }

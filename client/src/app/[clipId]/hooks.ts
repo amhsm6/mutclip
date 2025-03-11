@@ -86,6 +86,7 @@ export function useSocketContents({ clipId }: Props) {
 
                 setSocketState(s => ({ ...s, receiving: false }));
             } else if (m.nextChunk) {
+                // TODO: finish file
                 setFileSendState(fss => fss ? { nextChunk: fss.nextChunk + 1 } : null);
             } else if (m.hdr) {
                 fileRecvStateRef.current = {
@@ -97,47 +98,45 @@ export function useSocketContents({ clipId }: Props) {
                 setSocketState(s => ({ ...s, receiving: true }));
                 pushMessage({ type: MessageType.INFO, text: `Receiving ${m.hdr.filename}` });
             } else if (m.chunk) {
-        //    if (!fileBufferRef.current) {
-        //        setSocketState(s => ({ ...s, receiving: false }));
-        //        callback(false);
-        //        return;
-        //    }
+                if (!fileRecvStateRef.current) {
+                    setSocketState(s => ({ ...s, receiving: false }));
+                    return;
+                }
 
-        //    if (fileBufferRef.current.nextChunk != chunk.index) {
-        //        fileBufferRef.current = null;
-        //        callback(false);
-        //        setSocketState(s => ({ ...s, error: new Error("Internal Server Error") }));
-        //        return;
-        //    }
+                if (fileRecvStateRef.current.nextChunk != m.chunk.index) {
+                    fileRecvStateRef.current = null;
+                    setSocketState(s => ({ ...s, error: new Error("File transmission corrupted") }));
 
-        //    fileBufferRef.current.chunks.push(chunk);
-        //    fileBufferRef.current.nextChunk++;
+                    return;
+                }
 
-        //    if (fileBufferRef.current.nextChunk < fileBufferRef.current.header.numChunks) {
-        //        callback(true);
-        //        return;
-        //    }
+                fileRecvStateRef.current.chunks.push(m.chunk);
+                fileRecvStateRef.current.nextChunk++;
 
-        //    const data = new Blob(fileBufferRef.current.chunks.map(chunk => chunk.data));
+                if (fileRecvStateRef.current.nextChunk < fileRecvStateRef.current.header.numChunks) {
+                    const m = Message.create({ nextChunk: {} });
+                    ws.send(Message.encode(m).finish());
 
-        //    setContents({
-        //        type: "file",
-        //        contentType: fileBufferRef.current.header.type,
-        //        filename: fileBufferRef.current.header.name,
-        //        data,
-        //        chunks: fileBufferRef.current.chunks,
-        //        incoming: true
-        //    });
+                    return;
+                }
 
-        //    fileBufferRef.current = null;
+                const data = new Blob(fileRecvStateRef.current.chunks.map(chunk => chunk.data));
 
-        //    setSocketState(s => ({ ...s, receiving: false }));
-        //    callback(false);
+                setContents({
+                    type: "file",
+                    contentType: fileRecvStateRef.current.header.contentType,
+                    filename: fileRecvStateRef.current.header.filename,
+                    data,
+                    chunks: fileRecvStateRef.current.chunks,
+                    incoming: true
+                });
+
+                fileRecvStateRef.current = null;
+                setSocketState(s => ({ ...s, receiving: false }));
             } else if (m.ack) {
                 setSocketState(s => ({ ...s, sending: false }));
             } else if (m.err) {
                 pushMessage({ type: MessageType.ERROR, text: m.err.desc });
-                //    setSocketState(s => ({ ...s, error: new Error("Internal Server Error") })); TODO?
             } else {
                 pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
             }
