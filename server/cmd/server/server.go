@@ -1,19 +1,19 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
+    "context"
+    "fmt"
+    "net/http"
+    "net/url"
+    "os"
+    "strings"
 
-	"mutclip/pkg/clipboard"
-	"mutclip/pkg/msg"
+    "mutclip/pkg/clipboard"
+    "mutclip/pkg/msg"
 
-	"github.com/charmbracelet/log"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
+    "github.com/charmbracelet/log"
+    "github.com/gin-gonic/gin"
+    "github.com/gorilla/websocket"
 )
 
 func main() {

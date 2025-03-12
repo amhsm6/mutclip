@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"sync"
 
-	"mutclip/pkg/msg"
+	"mutclip/pkg/net"
 	pb "mutclip/pkg/pb/clip"
 
 	"github.com/charmbracelet/log"
@@ -21,10 +21,10 @@ type ClipboardServer struct {
 type ClipboardId = string
 
 type Clipboard struct {
-	ctx     context.Context
     content Content
-    recv    chan msg.InMessage
-    sends   map[uuid.UUID]chan msg.OutMessage
+    recv    chan net.InMessage
+    sends   map[net.CID]chan net.OutMessage
+	ctx     context.Context
 }
 
 type Content interface{}
@@ -66,10 +66,10 @@ func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
     s.Store(
         id,
         Clipboard{
-			ctx:     ctx,
             content: ContentText{},
-            recv:    make(chan msg.InMessage, 15),
-			sends:   make(map[uuid.UUID]chan msg.OutMessage),
+            recv:    make(chan net.InMessage, 15),
+			sends:   make(map[uuid.UUID]chan net.OutMessage),
+			ctx:     ctx,
         },
     )
 
@@ -92,7 +92,7 @@ func (s *ClipboardServer) updateClip(id ClipboardId, f func(*Clipboard)) {
     s.Store(id, *clip)
 }
 
-func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan msg.OutMessage) (chan msg.InMessage, uuid.UUID, error) {
+func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan net.OutMessage) (chan net.InMessage, uuid.UUID, error) {
     clip := s.getClip(id)
 	if clip == nil {
 		return nil, uuid.UUID{}, fmt.Errorf("invalid id: %v", id)
