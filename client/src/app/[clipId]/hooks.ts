@@ -10,8 +10,8 @@ type FileSendState = {
 };
 
 type FileRecvState = {
-    header:    FileHeader,
-    chunks:    Chunk[],
+    header: FileHeader,
+    chunks: Chunk[],
     nextChunk: number
 };
 
@@ -36,9 +36,9 @@ const cut = async (data: Blob) => {
 
 type SocketState = {
     connected: boolean,
-    sending:   boolean,
+    sending: boolean,
     receiving: boolean,
-    error:     Error | null
+    error: Error | null
 };
 
 type Props = {
@@ -90,14 +90,16 @@ export function useSocketContents({ clipId }: Props) {
                 setFileSendState(fss => fss ? { nextChunk: fss.nextChunk + 1 } : null);
             } else if (m.hdr) {
                 fileRecvStateRef.current = {
-                    header:    m.hdr,
-                    chunks:    [],
+                    header: m.hdr,
+                    chunks: [],
                     nextChunk: 0
                 };
 
                 setSocketState(s => ({ ...s, receiving: true }));
                 pushMessage({ type: MessageType.INFO, text: `Receiving ${m.hdr.filename}` });
             } else if (m.chunk) {
+                console.log(m.chunk);
+
                 if (!fileRecvStateRef.current) {
                     setSocketState(s => ({ ...s, receiving: false }));
                     return;
@@ -112,6 +114,7 @@ export function useSocketContents({ clipId }: Props) {
 
                 fileRecvStateRef.current.chunks.push(m.chunk);
                 fileRecvStateRef.current.nextChunk++;
+                console.log("here");
 
                 if (fileRecvStateRef.current.nextChunk < fileRecvStateRef.current.header.numChunks) {
                     const m = Message.create({ nextChunk: {} });
@@ -119,6 +122,7 @@ export function useSocketContents({ clipId }: Props) {
 
                     return;
                 }
+                console.log("done");
 
                 const data = new Blob(fileRecvStateRef.current.chunks.map(chunk => chunk.data));
 

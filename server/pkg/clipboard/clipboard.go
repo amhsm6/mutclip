@@ -6,13 +6,15 @@ import (
 	"math/rand/v2"
 	"strconv"
 	"sync"
+	"time"
 
 	"mutclip/pkg/net"
 	pb "mutclip/pkg/pb/clip"
 
 	"github.com/charmbracelet/log"
-	"github.com/google/uuid"
 )
+
+const DEADLINE = time.Minute * 2
 
 type ClipboardServer struct {
 	sync.Map
@@ -21,25 +23,26 @@ type ClipboardServer struct {
 type ClipboardId = string
 
 type Clipboard struct {
-    content Content
-    recv    chan net.InMessage
-    sends   map[net.CID]chan net.OutMessage
+	router  *net.Router
+	content Content
+	clients map[net.CID]struct{}
 	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
 type Content interface{}
 
 type ContentText struct {
-    data string
+	data string
 }
 
 type ContentFile struct {
-    ready          bool
-    chunks         [][]byte
-    nextChunkIndex int
-    numChunks      int
-    contentType    string
-    filename       string
+	ready          bool
+	chunks         [][]byte
+	nextChunkIndex int
+	numChunks      int
+	contentType    string
+	filename       string
 }
 
 func NewServer() *ClipboardServer {
@@ -50,62 +53,78 @@ const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
 // TODO: check for uniqueness
 func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
-    var parts []any
-    for i := 0; i < 6; i++ {
-        x := rand.N(len(alphabet) + 10)
-        if x < len(alphabet) {
-            parts = append(parts, string(alphabet[x])) 
-        } else {
-            parts = append(parts, strconv.Itoa(x - len(alphabet)))
-        }
-    }
-    id := fmt.Sprintf("%v%v-%v%v-%v%v", parts...)
+	var parts []any
+	for i := 0; i < 6; i++ {
+		x := rand.N(len(alphabet) + 10)
+		if x < len(alphabet) {
+			parts = append(parts, string(alphabet[x]))
+		} else {
+			parts = append(parts, strconv.Itoa(x-len(alphabet)))
+		}
+	}
+	id := fmt.Sprintf("%v%v-%v%v-%v%v", parts...)
 
-	log.Infof("generated %v", id)
+	clipCtx, cancel := context.WithCancel(ctx)
 
-    s.Store(
-        id,
-        Clipboard{
-            content: ContentText{},
-            recv:    make(chan net.InMessage, 15),
-			sends:   make(map[uuid.UUID]chan net.OutMessage),
-			ctx:     ctx,
-        },
-    )
+	log.Infof("* GEN %v", id)
+
+	s.Store(
+		id,
+		Clipboard{
+			router:  net.NewRouter(clipCtx),
+			clients: make(map[net.CID]struct{}),
+			content: ContentText{},
+			ctx:     clipCtx,
+			cancel:  cancel,
+		},
+	)
+
+	go func() {
+		<-clipCtx.Done()
+
+		time.Sleep(time.Second)
+		s.Delete(id)
+	}()
 
 	return id
 }
 
 func (s *ClipboardServer) getClip(id ClipboardId) *Clipboard {
-    x, ok := s.Load(id)
-    if !ok { return nil }
+	x, ok := s.Load(id)
+	if !ok {
+		return nil
+	}
 
-    clip, ok := x.(Clipboard)
-    if !ok { return nil }
+	clip, ok := x.(Clipboard)
+	if !ok {
+		return nil
+	}
 
-    return &clip
+	return &clip
 }
 
 func (s *ClipboardServer) updateClip(id ClipboardId, f func(*Clipboard)) {
-    clip := s.getClip(id)
-    f(clip)
-    s.Store(id, *clip)
+	clip := s.getClip(id)
+	f(clip)
+	s.Store(id, *clip)
 }
 
-func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan net.OutMessage) (chan net.InMessage, uuid.UUID, error) {
-    clip := s.getClip(id)
+func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan<- net.OutMessage) (chan<- net.InMessage, net.CID, context.Context, error) {
+	clip := s.getClip(id)
 	if clip == nil {
-		return nil, uuid.UUID{}, fmt.Errorf("invalid id: %v", id)
+		return nil, net.CID{}, nil, fmt.Errorf("invalid id: %v", id)
 	}
 
-	sid := uuid.New()
+	cid := clip.router.Connect(send, ctx)
 
-    clip.sends[sid] = send
+	log.Infof("[%v] + %v", id, cid)
 
-    err := s.send(id, sid)
-    if err != nil {
-        panic(err)
-    }
+	err := s.sendContents(id, cid)
+	if err != nil {
+		return nil, net.CID{}, nil, err
+	}
+
+	s.updateClip(id, func(c *Clipboard) { c.clients[cid] = struct{}{} })
 
 	go func() {
 		select {
@@ -113,242 +132,256 @@ func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan
 		case <-clip.ctx.Done():
 		}
 
-		delete(clip.sends, sid)
-        log.Infof("%v disconnected from %v", sid, id)
+		s.updateClip(id, func(c *Clipboard) { delete(c.clients, cid) })
+		log.Infof("[%v] - %v", id, cid)
 	}()
 
-	log.Infof("%v connected to %v", sid, id)
-
-    return clip.recv, sid, nil
+	return clip.router.Source, cid, clip.ctx, nil
 }
 
-func (s *ClipboardServer) reply(id ClipboardId, sid uuid.UUID, msg msg.OutMessage) error {
-	c, ok := s.getClip(id).sends[sid]
-	if !ok {
-        return fmt.Errorf("invalid sid: %v", sid)
-	}
+func (s *ClipboardServer) sendContents(id ClipboardId, cid net.CID) error {
+	clip := s.getClip(id)
+	r := clip.router
 
-	c <- msg
-    return nil
-}
-
-func (s *ClipboardServer) send(id ClipboardId, sid uuid.UUID) error {
-    switch content := s.getClip(id).content.(type) {
-    case ContentText:
+	switch content := clip.content.(type) {
+	case ContentText:
 		text := "<empty>"
 		if content.data != "" {
 			text = content.data
 		}
-		log.Infof("sync text %v", text)
+		log.Infof("[%v] SYNC => %v : TXT %v", id, cid, text)
 
-        return s.reply(id, sid, &pb.Message{ Msg: &pb.Message_Text{ Text: &pb.Text{ Data: content.data } } })
-    
-    case ContentFile:
-		log.Infof("sync file %v in %v chunks", content.filename, content.numChunks)
+		return r.Send(cid, &pb.Message{Msg: &pb.Message_Text{Text: &pb.Text{Data: content.data}}})
 
-		err := s.reply(id, sid, &pb.Message{ Msg: &pb.Message_Hdr{ Hdr: &pb.FileHeader{
-			Filename:    content.filename,
-			ContentType: content.contentType,
-			NumChunks:   int32(content.numChunks),
-		} } })
+	case ContentFile:
+		log.Infof("[%v] SYNC => %v : FILE %v/%v", id, cid, content.filename, content.numChunks)
+
+		tun, err := r.Tunnel(cid)
 		if err != nil {
 			return err
 		}
+		defer tun.Cancel()
+
+		tun.Out <- &pb.Message{Msg: &pb.Message_Hdr{Hdr: &pb.FileHeader{
+			Filename:    content.filename,
+			ContentType: content.contentType,
+			NumChunks:   int32(content.numChunks),
+		}}}
 
 		idx := 0
 		for {
-			log.Infof("sync chunk %v of %v chunks", idx + 1, content.numChunks)
+			log.Infof("[%v] SYNC => %v : %v/%v", id, cid, idx+1, content.numChunks)
 
-			err := s.reply(id, sid, &pb.Message{ Msg: &pb.Message_Chunk{ Chunk: &pb.Chunk{ Index: int32(idx), Data: content.chunks[idx] } } })
-			if err != nil {
-				return err
-			}
+			tun.Out <- &pb.Message{Msg: &pb.Message_Chunk{Chunk: &pb.Chunk{Index: int32(idx), Data: content.chunks[idx]}}}
 
-			if idx == content.numChunks - 1 {
-				log.Infof("sync done %v", sid)
+			if idx == content.numChunks-1 {
+				log.Infof("[%v] SYNC => %v : OK", id, cid)
 				return nil
 			}
 
 			select {
-			case m := <-s.getClip(id).recv:
-				if m.GetNextChunk() == nil || m.SID != sid {
+			case m := <-tun.In:
+				if m.GetNextChunk() == nil {
 					return fmt.Errorf("unexpected message while sending file %v", content.filename)
 				}
 
 				idx++
 
-			case <-s.getClip(id).ctx.Done():
-				return nil
+			case <-tun.Done():
+				return fmt.Errorf("client disconnected while sending file %v", content.filename)
 			}
 		}
-    
-    default:
-        panic("impossible")
-    }
+
+	default:
+		panic("impossible")
+	}
 }
 
-func (s *ClipboardServer) sync(id ClipboardId, srcSID uuid.UUID) {
-    wg := sync.WaitGroup{}
-    for sid := range s.getClip(id).sends {
-        if sid == srcSID { continue }
+func (s *ClipboardServer) syncClip(id ClipboardId, srcCID net.CID) {
+	clip := s.getClip(id)
+	r := clip.router
 
-        wg.Add(1)
+	switch content := clip.content.(type) {
+	case ContentText:
+		text := "<empty>"
+		if content.data != "" {
+			text = content.data
+		}
+		log.Infof("[%v] SYNC => @ : TXT %v", id, text)
 
-        go func() {
-            defer wg.Done()
+		r.Broadcast(
+			&pb.Message{Msg: &pb.Message_Text{Text: &pb.Text{Data: content.data}}},
+			map[net.CID]struct{}{srcCID: struct{}{}},
+		)
 
-            log.Infof("sync %v", sid)
+	case ContentFile:
+		wg := sync.WaitGroup{}
+		for cid := range clip.clients {
+			if cid == srcCID {
+				continue
+			}
 
-            err := s.send(id, sid)
-            if err != nil {
-                log.Error(err)
-            }
-        }()
-    }
+			wg.Add(1)
 
-    wg.Wait()
+			go func() {
+				defer wg.Done()
 
-    err := s.reply(id, srcSID, &pb.Message{ Msg: &pb.Message_Ack{ Ack: &pb.Ack{} } })
-    if err != nil {
-        log.Error(err)
-    }
+				err := s.sendContents(id, cid)
+				if err != nil {
+					log.Error(err)
+				}
+			}()
+		}
 
-	log.Info("sync ok")
+		wg.Wait()
+
+	default:
+		panic("impossible")
+	}
+
+	err := r.Send(srcCID, &pb.Message{Msg: &pb.Message_Ack{Ack: &pb.Ack{}}})
+	if err != nil {
+		log.Error(err)
+	}
+
+	log.Infof("[%v] ACK => %v", id, srcCID)
 }
 
-func (s *ClipboardServer) processText(id ClipboardId, sid uuid.UUID, m *pb.Text) {
-	log.Infof("got text message: %v", m.GetData())
+func (s *ClipboardServer) processText(id ClipboardId, cid net.CID, m *pb.Text) {
+	data := m.GetData()
 
-    s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{ data: m.GetData() } })
-    s.sync(id, sid)
+	text := "<empty>"
+	if data != "" {
+		text = data
+	}
+
+	if file, ok := s.getClip(id).content.(ContentFile); ok {
+		if !file.ready {
+			log.Errorf("file receiving in progress. denied text %v", text)
+			return
+		}
+	}
+
+	log.Infof("[%v] $ <= %v : TXT %v", id, cid, text)
+
+	s.updateClip(id, func(clip *Clipboard) { clip.content = ContentText{data} })
+	s.syncClip(id, cid)
 }
 
-// FIXME: make async
-// TODO: if wrong message gets in the way - maybe consider returning it to the channel before proceeding
-// TODO: implement filtering in message on different things
+func (s *ClipboardServer) processFile(id ClipboardId, cid net.CID, m *pb.FileHeader) {
+	clip := s.getClip(id)
+	r := clip.router
 
-func (s *ClipboardServer) processFile(id ClipboardId, sid uuid.UUID, m *pb.FileHeader) {
-    if file, ok := s.getClip(id).content.(ContentFile); ok {
-        if !file.ready {
-            log.Errorf("file receiving in progress. denied file %v", m.GetFilename())
-        }
-    }
+	if file, ok := clip.content.(ContentFile); ok {
+		if !file.ready {
+			log.Errorf("file receiving in progress. denied file %v", m.GetFilename())
+			return
+		}
+	}
 
-    log.Infof("got file %v of type %v in %v chunks", m.GetFilename(), m.GetContentType(), m.GetNumChunks())
+	log.Infof("[%v] $ <= %v : FILE %v/%v", id, cid, m.GetFilename(), m.GetNumChunks())
 
-    s.updateClip(id, func(clip *Clipboard) {
-		clip.content = ContentFile{
+	s.updateClip(id, func(c *Clipboard) {
+		c.content = ContentFile{
 			filename:    m.GetFilename(),
 			contentType: m.GetContentType(),
 			numChunks:   int(m.GetNumChunks()),
 		}
 	})
 
-    done := make(chan struct{}, 1)
+	tun, err := r.Tunnel(cid)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	defer tun.Cancel()
 
-    ctx, cancel := context.WithCancel(s.getClip(id).ctx)
-    defer cancel()
-
-	recvloop:
 	for {
 		select {
-		case m := <-s.getClip(id).recv:
+		case m := <-tun.In:
 			chunk := m.GetChunk()
-			if chunk == nil || m.SID != sid {
+			if chunk == nil {
 				log.Errorf("unexpected message while receiving file")
-
-				err := s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message")))
-				if err != nil {
-					log.Error(err)
-				}
-
+				tun.Out <- net.Err(fmt.Errorf("unexpected message"))
 				return
 			}
 
 			file, ok := s.getClip(id).content.(ContentFile)
 			if !ok {
-				log.Error("file transmission aborted")
+				tun.Out <- net.Err(fmt.Errorf("internal server error"))
+				log.Errorf("unexpected state of contents: %v", s.getClip(id).content)
 				return
 			}
 
 			if int(chunk.GetIndex()) != file.nextChunkIndex {
-                log.Errorf("received wrong chunk with index %v. expected %v", chunk.GetIndex(), file.nextChunkIndex)
-
-				err := s.reply(id, sid, msg.Err(fmt.Errorf("unexpected message")))
-				if err != nil {
-					log.Error(err)
-				}
-
+				log.Errorf("received wrong chunk with index %v. expected %v", chunk.GetIndex(), file.nextChunkIndex)
+				tun.Out <- net.Err(fmt.Errorf("unexpected message"))
 				return
-            }
+			}
 
-            log.Infof("got chunk %v of %v for %v", chunk.GetIndex() + 1, file.numChunks, file.filename)
+			log.Infof("[%v] <= %v : %v/%v", id, cid, chunk.GetIndex()+1, file.numChunks)
 
-            s.updateClip(id, func(clip *Clipboard) {
-                file, ok := clip.content.(ContentFile)
-                if !ok {
-                    cancel()
+			file.nextChunkIndex++
+			file.chunks = append(file.chunks, chunk.GetData())
 
-                    log.Error("receiving file aborted")
-                    return
-                }
+			if file.nextChunkIndex < file.numChunks {
+				s.updateClip(id, func(c *Clipboard) { c.content = file })
 
-                file.nextChunkIndex++
-                file.chunks = append(file.chunks, chunk.GetData())
+				tun.Out <- &pb.Message{Msg: &pb.Message_NextChunk{NextChunk: &pb.NextChunk{}}}
 
-                if file.nextChunkIndex < file.numChunks {
-                    clip.content = file
+				continue
+			}
 
-                    err := s.reply(id, sid, &pb.Message{ Msg: &pb.Message_NextChunk{ NextChunk: &pb.NextChunk{} } })
-					if err != nil {
-						log.Error(err)
-					}
+			file.ready = true
+			s.updateClip(id, func(c *Clipboard) { c.content = file })
 
-                    return
-                }
+			log.Infof("[%v] <= %v : OK", id, cid)
 
-                file.ready = true
-                clip.content = file
+			s.syncClip(id, cid)
+			return
 
-				log.Infof("done file %v", file.filename)
-
-                done <- struct{}{}
-            })
-
-        case <-done:
-            break recvloop
-		
-		case <-ctx.Done():
+		case <-tun.Done():
+			log.Error("client disconnected while transmitting")
 			return
 		}
 	}
-
-	s.sync(id, sid)
 }
 
-// TODO: make cleanup
 func (s *ClipboardServer) Start(id ClipboardId) {
-	log.Infof("started %v", id)
+	clip := s.getClip(id)
+	r := clip.router
 
-    for {
-        select {
-        case m := <-s.getClip(id).recv:
+	log.Infof("* START %v", id)
+
+	go r.Start()
+
+	timer := time.NewTimer(DEADLINE)
+	go func() {
+		<-timer.C
+		clip.cancel()
+	}()
+
+	for {
+		select {
+		case m := <-r.Drain:
+			timer.Reset(DEADLINE)
+
 			if text := m.GetText(); text != nil {
-				s.processText(id, m.SID, text)
+				go s.processText(id, m.Cid, text)
 				continue
 			}
 
 			if hdr := m.GetHdr(); hdr != nil {
-				s.processFile(id, m.SID, hdr)
+				go s.processFile(id, m.Cid, hdr)
 				continue
 			}
 
-			log.Errorf("unexpected message: %v", m)
-			s.reply(id, m.SID, msg.Err(fmt.Errorf("unpexpected message")))
+			log.Errorf("unexpected message")
+			r.Send(m.Cid, net.Err(fmt.Errorf("unpexpected message")))
 
-		case <-s.getClip(id).ctx.Done():
-			log.Infof("finished %v", id)
+		case <-clip.ctx.Done():
+			log.Infof("* END %v", id)
 			return
 		}
-    }
+	}
 }

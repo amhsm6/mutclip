@@ -1,70 +1,194 @@
 package net
 
 import (
-    "context"
-    "sync"
-
-    "github.com/google/uuid"
+	"context"
+	"fmt"
+	"sync"
 )
 
-type RID = uuid.UUID
+type Router struct {
+	Source chan InMessage
+	Drain  chan InMessage
 
-type Router[T any] struct {
-    source chan T
-    routes sync.Map
-    ctx    context.Context
+	tunnels sync.Map
+	conns   sync.Map
+
+	ctx context.Context
 }
 
-type Route[T any] struct {
-    filter      func(T) bool
-    priority    int
-    destination chan T
+type Tunnel struct {
+	context.Context
+	Cancel context.CancelFunc
+
+	In  chan InMessage
+	Out chan OutMessage
 }
 
-func NewRouter[T any](source chan T, ctx context.Context) *Router[T] {
-    return &Router[T]{ source: source, ctx: ctx }
+type Conn struct {
+	out chan<- OutMessage
+	ctx context.Context
 }
 
-func (r *Router[T]) Route(ctx context.Context, filter func(T) bool, priority int, dest chan T) {
-    route := &Route[T]{
-        filter:      filter,
-        priority:    priority,
-        destination: dest,
-    }
-
-    rid := uuid.New()
-
-    r.routes.Store(rid, route)
-
-    go func() {
-        select {
-        case <-r.ctx.Done():
-        case <-ctx.Done():
-        }
-
-        r.routes.Delete(rid)
-    }()
+func NewRouter(ctx context.Context) *Router {
+	return &Router{
+		Source: make(chan InMessage, 15),
+		Drain:  make(chan InMessage, 15),
+		ctx:    ctx,
+	}
 }
 
-func (r *Router[T]) Start() {
-    for {
-        select {
-        case m := <-r.source:
-            r.routes.Range(func(_, value any) bool {
-                route, ok := value.(*Route[T])
-                if !ok {
-                    panic("impossible")
-                }
+func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
+	cid := newCID()
 
-                if route.filter(m) {
-                    
-                }
+	conn := &Conn{out, ctx}
+	r.conns.Store(cid, conn)
 
-                return true
-            })
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-r.ctx.Done():
+		}
 
-        case <-r.ctx.Done():
-            return
-        }
-    }
+		r.conns.Delete(cid)
+	}()
+
+	return cid
+}
+
+func (r *Router) Send(cid CID, m OutMessage) error {
+	a, ok := r.conns.Load(cid)
+	if !ok {
+		return fmt.Errorf("invalid cid: %v", cid)
+	}
+
+	conn, ok := a.(*Conn)
+	if !ok {
+		panic("impossible")
+	}
+
+	conn.out <- m
+	return nil
+}
+
+func (r *Router) Broadcast(m OutMessage, except map[CID]struct{}) {
+	r.conns.Range(func(key, value any) bool {
+		cid, ok := key.(CID)
+		if !ok {
+			panic("impossible")
+		}
+
+		if _, ok := except[cid]; ok {
+			return true
+		}
+
+		conn, ok := value.(*Conn)
+		if !ok {
+			panic("impossible")
+		}
+
+		conn.out <- m
+		return true
+	})
+}
+
+// FIXME: what if client disconnects at the moment of sending to channel (hopefully impossible)
+// TODO: function to kill all tunnels
+
+func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
+	_, ok := r.tunnels.Load(cid)
+	if ok {
+		return nil, fmt.Errorf("duplicate tunnel: %v", cid)
+	}
+
+	a, ok := r.conns.Load(cid)
+	if !ok {
+		return nil, fmt.Errorf("invalid cid: %v", cid)
+	}
+
+	conn, ok := a.(*Conn)
+	if !ok {
+		panic("impossible")
+	}
+
+	in := make(chan InMessage, 15)
+	out := make(chan OutMessage, 15)
+
+	tunCtx, cancel := context.WithCancel(conn.ctx)
+
+	tun := &Tunnel{
+		Context: tunCtx,
+		Cancel:  cancel,
+		In:      in,
+		Out:     out,
+	}
+
+	r.tunnels.Store(cid, tun)
+
+	go func() {
+		defer cancel()
+
+		for {
+			select {
+			case m := <-out:
+				conn.out <- m
+
+			case <-tunCtx.Done():
+				return
+
+			case <-r.ctx.Done():
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer cancel()
+
+		select {
+		case <-tunCtx.Done():
+		case <-r.ctx.Done():
+		}
+
+		r.tunnels.Delete(cid)
+		close(in)
+		close(out)
+	}()
+
+	return tun, nil
+}
+
+func (r *Router) Start() {
+	for {
+		select {
+		case m := <-r.Source:
+			sent := false
+			r.tunnels.Range(func(key, val any) bool {
+				cid, ok := key.(CID)
+				if !ok {
+					panic("impossible")
+				}
+
+				tun, ok := val.(*Tunnel)
+				if !ok {
+					panic("impossible")
+				}
+
+				if m.Cid == cid {
+					tun.In <- m
+
+					sent = true
+					return false
+				}
+
+				return true
+			})
+
+			if !sent {
+				r.Drain <- m
+			}
+
+		case <-r.ctx.Done():
+			return
+		}
+	}
 }
