@@ -8,11 +8,11 @@ type Props = React.ComponentProps<"button">;
 export default function ControlButton({ children, className, disabled, ...props }: Props) {
     return (
         <button
-            className={ `${disabled ? styles.disabled : styles.button} ${className}` }
-            disabled={ disabled }
-            { ...props }
+            className={`${disabled ? styles.disabled : styles.button} ${className}`}
+            disabled={disabled}
+            {...props}
         >
-            { children }
+            {children}
         </button>
     );
 }

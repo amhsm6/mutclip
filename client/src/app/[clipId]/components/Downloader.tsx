@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useContext, useRef } from "react";
-import MessageQueueContext from "@/contexts/MessageQueueContext";
-import { Contents, MessageType } from "@/types/clipboard";
+import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext";
+import { Contents } from "../types/clipboard";
 import ControlButton from "@/components/ControlButton";
 import { FaDownload } from "react-icons/fa6";
 import styles from "./Downloader.module.css";
@@ -31,10 +31,10 @@ export default function Downloader({ contents }: Props) {
 
     return (
         <>
-            <ControlButton className={ styles.download } onClick={ download }>
+            <ControlButton className={styles.download} onClick={download}>
                 <FaDownload />
             </ControlButton>
-            <a ref={ downloaderRef } style={{ display: "none" }}></a>
+            <a ref={downloaderRef} style={{ display: "none" }}></a>
         </>
     );
 }

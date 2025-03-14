@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useContext, useRef } from "react";
-import MessageQueueContext from "@/contexts/MessageQueueContext";
-import { Contents, MessageType } from "@/types/clipboard";
+import MessageQueueContext, { MessageType } from "./contexts/MessageQueueContext";
+import { Contents } from "./types/clipboard";
 import { FileHeader, Message, Chunk } from "@/pb/clip";
+import SocketContext from "./contexts/SocketContext";
 
 type FileSendState = {
     nextChunk: number
@@ -41,14 +42,10 @@ type SocketState = {
     error: Error | null
 };
 
-type Props = {
-    clipId: string
-};
+export function useSocketContents() {
+    const { sendMessage, queue, socketOk } = useContext(SocketContext);
 
-export function useSocketContents({ clipId }: Props) {
-    const socketRef = useRef<WebSocket | null>(null);
-
-    const [contents, setContents] = useState<Contents & { incoming?: boolean }>({ type: "text", data: "" });
+    const [contents, setContents] = useState<Contents & { incoming?: boolean }>({ type: "text", data: "", incoming: true });
 
     const fileRecvStateRef = useRef<FileRecvState | null>(null);
     const [fileSendState, setFileSendState] = useState<FileSendState | null>(null);
@@ -63,134 +60,103 @@ export function useSocketContents({ clipId }: Props) {
     });
 
     useEffect(() => {
-        pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." });
+        setSocketState(s => ({ ...s, connected: socketOk }));
+    }, [socketOk]);
 
-        const ws = new WebSocket(`/ws/${clipId}`);
-        ws.binaryType = "arraybuffer";
+    useEffect(() => {
+        const m = queue.shift();
+        if (!m) { return; }
 
-        ws.onopen = () => {
-            setSocketState(s => ({ ...s, connected: true }));
-            pushMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
-        };
+        if (m.text) {
+            setContents({ type: "text", data: m.text.data, incoming: true });
 
-        ws.onmessage = msg => {
-            if (!(msg.data instanceof ArrayBuffer)) {
-                pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
+            setSocketState(s => ({ ...s, receiving: false }));
+        } else if (m.nextChunk) {
+            setFileSendState(fss => fss ? { nextChunk: fss.nextChunk + 1 } : null);
+        } else if (m.hdr) {
+            fileRecvStateRef.current = {
+                header: m.hdr,
+                chunks: [],
+                nextChunk: 0
+            };
+
+            setSocketState(s => ({ ...s, receiving: true }));
+            pushMessage({ type: MessageType.INFO, text: `Receiving ${m.hdr.filename}` });
+
+            sendMessage(Message.create({ nextChunk: {} }));
+        } else if (m.chunk) {
+            if (!fileRecvStateRef.current) {
+                setSocketState(s => ({ ...s, receiving: false }));
                 return;
             }
 
-            const m = Message.decode(new Uint8Array(msg.data));
-
-            if (m.text) {
-                setContents({ type: "text", data: m.text.data, incoming: true });
-
-                setSocketState(s => ({ ...s, receiving: false }));
-            } else if (m.nextChunk) {
-                // TODO: finish file
-                setFileSendState(fss => fss ? { nextChunk: fss.nextChunk + 1 } : null);
-            } else if (m.hdr) {
-                fileRecvStateRef.current = {
-                    header: m.hdr,
-                    chunks: [],
-                    nextChunk: 0
-                };
-
-                setSocketState(s => ({ ...s, receiving: true }));
-                pushMessage({ type: MessageType.INFO, text: `Receiving ${m.hdr.filename}` });
-            } else if (m.chunk) {
-                console.log(m.chunk);
-
-                if (!fileRecvStateRef.current) {
-                    setSocketState(s => ({ ...s, receiving: false }));
-                    return;
-                }
-
-                if (fileRecvStateRef.current.nextChunk != m.chunk.index) {
-                    fileRecvStateRef.current = null;
-                    setSocketState(s => ({ ...s, error: new Error("File transmission corrupted") }));
-
-                    return;
-                }
-
-                fileRecvStateRef.current.chunks.push(m.chunk);
-                fileRecvStateRef.current.nextChunk++;
-                console.log("here");
-
-                if (fileRecvStateRef.current.nextChunk < fileRecvStateRef.current.header.numChunks) {
-                    const m = Message.create({ nextChunk: {} });
-                    ws.send(Message.encode(m).finish());
-
-                    return;
-                }
-                console.log("done");
-
-                const data = new Blob(fileRecvStateRef.current.chunks.map(chunk => chunk.data));
-
-                setContents({
-                    type: "file",
-                    contentType: fileRecvStateRef.current.header.contentType,
-                    filename: fileRecvStateRef.current.header.filename,
-                    data,
-                    chunks: fileRecvStateRef.current.chunks,
-                    incoming: true
-                });
-
+            if (fileRecvStateRef.current.nextChunk != m.chunk.index) {
                 fileRecvStateRef.current = null;
-                setSocketState(s => ({ ...s, receiving: false }));
-            } else if (m.ack) {
-                setSocketState(s => ({ ...s, sending: false }));
-            } else if (m.err) {
-                pushMessage({ type: MessageType.ERROR, text: m.err.desc });
-            } else {
-                pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
+                pushMessage({ type: MessageType.ERROR, text: "Transmission disordered" });
+                return;
             }
-        };
 
-        socketRef.current = ws;
+            fileRecvStateRef.current.chunks.push(m.chunk);
+            fileRecvStateRef.current.nextChunk++;
 
-        return () => {
-            ws.close();
-            socketRef.current = null;
-            setSocketState(s => ({ ...s, connected: false }));
-        };
-    }, []);
+            if (fileRecvStateRef.current.nextChunk < fileRecvStateRef.current.header.numChunks) {
+                sendMessage(Message.create({ nextChunk: {} }));
+                return;
+            }
+
+            const data = new Blob(fileRecvStateRef.current.chunks.map(chunk => chunk.data));
+
+            setContents({
+                type: "file",
+                contentType: fileRecvStateRef.current.header.contentType,
+                filename: fileRecvStateRef.current.header.filename,
+                data,
+                chunks: fileRecvStateRef.current.chunks,
+                incoming: true
+            });
+
+            fileRecvStateRef.current = null;
+            setSocketState(s => ({ ...s, receiving: false }));
+        } else if (m.ack) {
+            setFileSendState(null);
+            setSocketState(s => ({ ...s, sending: false }));
+        } else if (m.err) {
+            pushMessage({ type: MessageType.ERROR, text: m.err.desc });
+        } else {
+            pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
+        }
+    }, [queue.length]);
 
     useEffect(() => {
-        const socket = socketRef.current;
         const index = fileSendState?.nextChunk;
-
-        if (!socket || socket.readyState != WebSocket.OPEN || index === undefined || contents.type !== "file") { return; }
+        if (index === undefined || index === -1 || contents.type !== "file") { return; }
 
         if (index >= contents.chunks.length) {
             pushMessage({ type: MessageType.ERROR, text: "File send might be corrupted" });
             return;
         }
 
-        const m = Message.create({
+        sendMessage(Message.create({
             chunk: contents.chunks[index]
-        });
-        socket.send(Message.encode(m).finish());
+        }));
     }, [fileSendState, contents.data])
 
     useEffect(() => {
-        const socket = socketRef.current;
-        if (!socket || socket.readyState != WebSocket.OPEN || contents.incoming) { return; }
+        if (contents.incoming) { return; }
 
         const timeout = setTimeout(() => {
             setSocketState(s => ({ ...s, sending: true }));
 
             if (contents.type === "text") {
-                const m = Message.create({
+                sendMessage(Message.create({
                     text: { data: contents.data }
-                });
-                socket.send(Message.encode(m).finish());
+                }));
             } else {
-                const m = Message.create({
+                sendMessage(Message.create({
                     hdr: { filename: contents.filename, contentType: contents.contentType, numChunks: contents.chunks.length }
-                });
-                socket.send(Message.encode(m).finish());
+                }));
 
-                setFileSendState({ nextChunk: 0 });
+                setFileSendState({ nextChunk: -1 });
             }
         }, 500);
 
@@ -198,13 +164,11 @@ export function useSocketContents({ clipId }: Props) {
     }, [contents.data]);
 
     const reset = () => {
-        const socket = socketRef.current;
-        if (!socket) { return; }
+        if (fileSendState || fileRecvStateRef.current) { return; }
 
         setSocketState(s => ({ ...s, sending: false, receiving: false }));
 
-        const m = Message.create({ text: { data: "" } });
-        socket.send(Message.encode(m).finish());
+        sendMessage(Message.create({ text: { data: "" } }));
 
         setContents({ type: "text", data: "", incoming: true });
         setFileSendState(null);

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Message, MessageType } from "@/types/clipboard";
+import { Message, MessageType } from "../contexts/MessageQueueContext";
 import styles from "./MessageEntry.module.css";
 
 export type EntryProps = {
@@ -44,8 +44,8 @@ export default function MessageEntry({ message, animation }: EntryProps) {
     }, [animation]);
 
     return (
-        <div className={ `${styles.message} ${typeclass}` } style={{ transform: `translate(${die ? 500 * DIRECTION : 0}px, ${dy}px)` }}>
-            <span>{ message.text }</span>
+        <div className={`${styles.message} ${typeclass}`} style={{ transform: `translate(${die ? 500 * DIRECTION : 0}px, ${dy}px)` }}>
+            <span>{message.text}</span>
         </div>
     );
 }

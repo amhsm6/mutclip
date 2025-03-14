@@ -1,8 +1,18 @@
 "use client";
 
 import React, { createContext, useState, useEffect, useRef } from "react";
-import type { EntryProps } from "@/app/[clipId]/components/MessageEntry";
-import type { Message } from "@/types/clipboard";
+import type { EntryProps } from "../components/MessageEntry";
+
+export type Message = {
+    type: MessageType,
+    text: string
+};
+
+export enum MessageType {
+    SUCCESS,
+    INFO,
+    ERROR
+};
 
 type MessageQueue = {
     entries: Entry[],
@@ -16,13 +26,11 @@ type Entry = {
 
 type PushMessage = (m: Message) => void;
 
-const MessageQueueContext = createContext<MessageQueue>({ entries: [], pushMessage: () => {} });
+const MessageQueueContext = createContext<MessageQueue>({ entries: [], pushMessage: () => { } });
 
 export default MessageQueueContext;
 
-type Props = { children: React.ReactNode };
-
-export function MessageQueueProvider({ children }: Props): React.ReactNode {
+export function MessageQueueProvider({ children }: React.PropsWithChildren) {
     const [entries, setEntries] = useState<Entry[]>([]);
     const newEntryId = useRef(0);
 
@@ -43,5 +51,5 @@ export function MessageQueueProvider({ children }: Props): React.ReactNode {
         }, 1500);
     }, [entries.length]);
 
-    return <MessageQueueContext.Provider value={{ entries, pushMessage }}>{ children }</MessageQueueContext.Provider>;
+    return <MessageQueueContext.Provider value={{ entries, pushMessage }}>{children}</MessageQueueContext.Provider>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { Contents } from "@/types/clipboard";
+import type { Contents } from "../types/clipboard";
 import styles from "./Preview.module.css";
 
 const previewTypes: string[] = ["image/gif", "image/png", "image/jpeg"];
@@ -14,5 +14,5 @@ export default function Preview({ contents }: Props) {
     }
 
     const src = URL.createObjectURL(contents.data);
-    return <img className={ styles.img } src={ src } />;
+    return <img className={styles.img} src={src} />;
 }

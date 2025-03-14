@@ -29,13 +29,13 @@ export default function InputBox({ index, cursor, set, clear, notFound, forceLas
 
     return (
         <input
-            ref={ ref }
-            value={ value }
-            className={ `${styles.input} ${notFound ? styles["not-found"] : styles.ok}` }
-            maxLength={ 1 }
-            onChange={ e => setValue(e.target.value.toLowerCase()) }
-            onKeyDown={ e => e.key === "Backspace" && clear() }
-            onBlur={ () => (cursor === index || forceLast) && ref.current?.focus() }
+            ref={ref}
+            value={value}
+            className={`${styles.input} ${notFound ? styles["not-found"] : styles.ok}`}
+            maxLength={1}
+            onChange={e => setValue(e.target.value.toLowerCase())}
+            onKeyDown={e => e.key === "Backspace" && clear()}
+            onBlur={() => (cursor === index || forceLast) && ref.current?.focus()}
         />
     );
 }

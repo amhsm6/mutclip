@@ -12,16 +12,15 @@ export async function newclip() {
     redirect(`/${clipId}`);
 }
 
-export async function connect(input: string) {
-    const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
+export async function checkClip(id: string) {
     const resp = await fetch(`http://${process.env.SERVER}:5000/check/${id}`, { cache: "no-store" });
 
     if (resp.ok) {
-        redirect(`/${id}`);
+        return true;
     }
 
     if (resp.status === 404) {
-        return true;
+        return false;
     }
 
     throw new Error(await resp.text());

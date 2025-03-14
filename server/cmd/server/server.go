@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"mutclip/pkg/clipboard"
 	"mutclip/pkg/net"
@@ -15,6 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+const ConnDeadline = time.Minute
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
@@ -88,6 +91,18 @@ func main() {
 			return
 		}
 
+		timer := time.NewTimer(ConnDeadline)
+		go func() {
+			select {
+			case <-timer.C:
+				log.Error("websocket deadline expired")
+
+			case <-ctx.Done():
+			}
+
+			cancel()
+		}()
+
 		go func() {
 			<-clipCtx.Done()
 			cancel()
@@ -102,6 +117,8 @@ func main() {
 					log.Error(err)
 					return
 				}
+
+				timer.Reset(ConnDeadline)
 
 				switch typ {
 				case websocket.BinaryMessage:

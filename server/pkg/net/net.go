@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 type Router struct {
@@ -91,9 +92,6 @@ func (r *Router) Broadcast(m OutMessage, except map[CID]struct{}) {
 	})
 }
 
-// FIXME: what if client disconnects at the moment of sending to channel (hopefully impossible)
-// TODO: function to kill all tunnels
-
 func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	_, ok := r.tunnels.Load(cid)
 	if ok {
@@ -149,12 +147,29 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 		case <-r.ctx.Done():
 		}
 
+		time.Sleep(time.Second)
+
 		r.tunnels.Delete(cid)
 		close(in)
 		close(out)
 	}()
 
 	return tun, nil
+}
+
+func (r *Router) DestroyTunnel(cid CID) error {
+	a, ok := r.tunnels.LoadAndDelete(cid)
+	if !ok {
+		return fmt.Errorf("invalid tunnel: %v", cid)
+	}
+
+	tun, ok := a.(*Tunnel)
+	if !ok {
+		panic("impossible")
+	}
+
+	tun.Cancel()
+	return nil
 }
 
 func (r *Router) Start() {
