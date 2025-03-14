@@ -1,7 +1,12 @@
-build: proto build-server build-client
+build: proto
+	docker compose build
 
-deploy:
-	kubectl rollout restart deploy -n mutclip
+push:
+	docker compose push
+
+pull:
+	docker compose pull
+
 
 init: init-client proto
 
@@ -19,20 +24,12 @@ clean-proto:
 reproto: clean-proto proto
 
 
-build-server:
-	docker build server -t localhost:31509/mutclip-server
-	docker push localhost:31509/mutclip-server
-
 dev-server:
 	set -a && . ./.env && set +a && cd server && CI=1 CLICOLOR_FORCE=1 air
 
 clean-server:
 	rm -rf server/bin
 
-
-build-client:
-	docker build client -t localhost:31509/mutclip-client
-	docker push localhost:31509/mutclip-client
 
 dev-client:
 	set -a && . ./.env && set +a && cd client; npm run dev
