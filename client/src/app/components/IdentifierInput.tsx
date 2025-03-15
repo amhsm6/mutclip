@@ -3,10 +3,14 @@
 import React, { useState, useEffect } from "react";
 import { checkClip } from "../actions";
 import InputBox from "./InputBox";
-import styles from "./IdentifierInput.module.css";
 import { useRouter } from "next/navigation";
+import styles from "./IdentifierInput.module.css";
 
-export default function IndetifierInput() {
+type Props = {
+    setLoad: React.Dispatch<React.SetStateAction<boolean>>
+};
+
+export default function IndetifierInput({ setLoad }: Props) {
     const router = useRouter();
 
     const [cursor, setCursor] = useState(0);
@@ -29,12 +33,15 @@ export default function IndetifierInput() {
 
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
 
+        setLoad(true);
+
         checkClip(id)
             .then(ok => {
                 if (ok) {
                     router.push(`/${id}`);
                 } else {
                     setNotFound(true);
+                    setLoad(false);
                 }
             })
             .catch(err => setError(err));

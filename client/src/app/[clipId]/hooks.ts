@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useContext, useRef } from "react";
-import MessageQueueContext, { MessageType } from "./contexts/MessageQueueContext";
-import { Contents } from "./types/clipboard";
-import { FileHeader, Message, Chunk } from "@/pb/clip";
 import SocketContext from "./contexts/SocketContext";
+import MessageQueueContext, { MessageType } from "./contexts/MessageQueueContext";
+import type { Contents } from "./types/clipboard";
+import { FileHeader, Message, Chunk } from "@/pb/clip";
 
 type FileSendState = {
     nextChunk: number
@@ -61,7 +61,14 @@ export function useSocketContents() {
 
     useEffect(() => {
         setSocketState(s => ({ ...s, connected: socketOk }));
-    }, [socketOk]);
+
+        if (!socketOk) {
+            setFileSendState(null);
+            fileRecvStateRef.current = null;
+
+            setSocketState(s => ({ ...s, sending: false, receiving: false }));
+        }
+    }, [socketOk, fileSendState]);
 
     useEffect(() => {
         const m = queue.shift();
@@ -87,11 +94,15 @@ export function useSocketContents() {
         } else if (m.chunk) {
             if (!fileRecvStateRef.current) {
                 setSocketState(s => ({ ...s, receiving: false }));
+
+                pushMessage({ type: MessageType.ERROR, text: "Unexpected message while receiving" });
                 return;
             }
 
             if (fileRecvStateRef.current.nextChunk != m.chunk.index) {
                 fileRecvStateRef.current = null;
+                setSocketState(s => ({ ...s, receiving: false }));
+
                 pushMessage({ type: MessageType.ERROR, text: "Transmission disordered" });
                 return;
             }
@@ -121,8 +132,21 @@ export function useSocketContents() {
             setFileSendState(null);
             setSocketState(s => ({ ...s, sending: false }));
         } else if (m.err) {
-            pushMessage({ type: MessageType.ERROR, text: m.err.desc });
+            setFileSendState(null);
+            fileRecvStateRef.current = null;
+            setSocketState(s => ({ ...s, sending: false, receiving: false }));
+
+            // FIXME
+            if (/invalid id/.test(m.err?.desc)) {
+                setSocketState(s => ({ ...s, error: new Error(m.err?.desc) }));
+            } else {
+                pushMessage({ type: MessageType.ERROR, text: m.err.desc });
+            }
         } else {
+            setFileSendState(null);
+            fileRecvStateRef.current = null;
+            setSocketState(s => ({ ...s, sending: false, receiving: false }));
+
             pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
         }
     }, [queue.length]);
@@ -132,6 +156,9 @@ export function useSocketContents() {
         if (index === undefined || index === -1 || contents.type !== "file") { return; }
 
         if (index >= contents.chunks.length) {
+            setFileSendState(null);
+            setSocketState(s => ({ ...s, sending: false }));
+
             pushMessage({ type: MessageType.ERROR, text: "File send might be corrupted" });
             return;
         }
@@ -166,13 +193,14 @@ export function useSocketContents() {
     const reset = () => {
         if (fileSendState || fileRecvStateRef.current) { return; }
 
-        setSocketState(s => ({ ...s, sending: false, receiving: false }));
-
         sendMessage(Message.create({ text: { data: "" } }));
 
         setContents({ type: "text", data: "", incoming: true });
+
         setFileSendState(null);
         fileRecvStateRef.current = null;
+
+        setSocketState(s => ({ ...s, sending: false, receiving: false }));
     };
 
     const setText = (text: string) => {

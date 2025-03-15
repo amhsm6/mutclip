@@ -50,6 +50,7 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
 
         ws.onopen = () => {
             socketRef.current.ok = true;
+            socketRef.current.reconnecting = false;
             setSocketOk(true);
             pushMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
         };

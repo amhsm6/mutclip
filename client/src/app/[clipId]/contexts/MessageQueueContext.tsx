@@ -33,12 +33,22 @@ export default MessageQueueContext;
 export function MessageQueueProvider({ children }: React.PropsWithChildren) {
     const [entries, setEntries] = useState<Entry[]>([]);
     const newEntryId = useRef(0);
+    const spawnDelay = useRef(0);
 
     const pushMessage: PushMessage = message => {
-        setEntries(es => [
-            { props: { message, animation: 0 }, id: newEntryId.current++ },
-            ...es.map(({ props, ...e }) => ({ ...e, props: { ...props, animation: props.animation + 1 } }))
-        ]);
+        const delay = spawnDelay.current;
+
+        spawnDelay.current += 700;
+        setTimeout(() => {
+            spawnDelay.current -= 700;
+        }, 700);
+
+        setTimeout(() => {
+            setEntries(es => [
+                { props: { message, animation: 0 }, id: newEntryId.current++ },
+                ...es.map(({ props, ...e }) => ({ ...e, props: { ...props, animation: props.animation + 1 } }))
+            ]);
+        }, delay);
     };
 
     useEffect(() => {

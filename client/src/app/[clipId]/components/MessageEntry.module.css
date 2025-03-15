@@ -1,4 +1,5 @@
 .message {
+    position: absolute;
     padding: 8px;
     box-shadow: 0px 5px;
     border-radius: 10px;

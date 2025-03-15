@@ -1,15 +1,12 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
 export async function newclip() {
     const resp = await fetch(`http://${process.env.SERVER}:5000/newclip`, { cache: "no-store" });
     if (!resp.ok) {
         throw new Error(await resp.text());
     }
 
-    const clipId = await resp.text();
-    redirect(`/${clipId}`);
+    return await resp.text();
 }
 
 export async function checkClip(id: string) {

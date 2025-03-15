@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useContext } from "react";
-import MessageQueueContext from "@/app/[clipId]/contexts/MessageQueueContext";
+import MessageQueueContext from "../contexts/MessageQueueContext";
 import MessageEntry from "./MessageEntry";
 import styles from "./MessageBox.module.css";
 
@@ -10,7 +10,7 @@ export default function MessageBox() {
 
     return (
         <div className={styles.box}>
-            {entries.map((e, i) => <MessageEntry {...e.props} key={e.id} />)}
+            {entries.map((e) => <MessageEntry {...e.props} key={e.id} />)}
         </div>
     );
 }
