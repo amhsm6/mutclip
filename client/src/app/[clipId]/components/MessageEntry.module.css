@@ -4,7 +4,7 @@
     box-shadow: 0px 5px;
     border-radius: 10px;
     font-size: 1.2rem;
-    transition: all 0.3s;
+    transition: all 0.4s;
     animation: appear-left 0.3s;
 }
 

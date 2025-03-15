@@ -13,7 +13,7 @@ FROM alpine
 
 WORKDIR /app
 
-COPY --from=builder /build/bin/server /app/server
+COPY --from=builder /build/bin/server .
 
 EXPOSE 5000
 

@@ -77,12 +77,12 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
             ws.close();
 
             pushMessage({ type: MessageType.ERROR, text: "Websocket Error" });
-            pushMessage({ type: MessageType.INFO, text: "Reconnecting in 1s" });
+            pushMessage({ type: MessageType.INFO, text: "Reconnecting in 2s" });
 
             setTimeout(() => {
                 pushMessage({ type: MessageType.INFO, text: "Reconnecting..." });
                 setReconnect(true);
-            }, 1000);
+            }, 2000);
         };
 
         ws.onclose = () => {
@@ -96,12 +96,12 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
             ws.close();
 
             pushMessage({ type: MessageType.ERROR, text: "Websocket Closed Unexpectedly" });
-            pushMessage({ type: MessageType.INFO, text: "Reconnecting in 1s" });
+            pushMessage({ type: MessageType.INFO, text: "Reconnecting in 2s" });
 
             setTimeout(() => {
                 pushMessage({ type: MessageType.INFO, text: "Reconnecting..." });
                 setReconnect(true);
-            }, 1000);
+            }, 2000);
         };
     }, [reconnect]);
 

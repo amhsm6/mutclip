@@ -35,13 +35,19 @@ export function MessageQueueProvider({ children }: React.PropsWithChildren) {
     const newEntryId = useRef(0);
     const spawnDelay = useRef(0);
 
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (spawnDelay.current) {
+                spawnDelay.current -= 10;
+            }
+        }, 10);
+
+        return () => clearInterval(interval);
+    }, []);
+
     const pushMessage: PushMessage = message => {
         const delay = spawnDelay.current;
-
-        spawnDelay.current += 700;
-        setTimeout(() => {
-            spawnDelay.current -= 700;
-        }, 700);
+        spawnDelay.current += 400;
 
         setTimeout(() => {
             setEntries(es => [

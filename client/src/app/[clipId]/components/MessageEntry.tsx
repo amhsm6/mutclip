@@ -35,7 +35,7 @@ export default function MessageEntry({ message, animation }: EntryProps) {
     const [renderDelay, setRenderDelay] = useState(true);
 
     useEffect(() => {
-        setTimeout(() => setRenderDelay(false), 100);
+        setTimeout(() => setRenderDelay(false), 50);
     }, []);
 
     const [dy, setDy] = useState(0);
@@ -43,7 +43,7 @@ export default function MessageEntry({ message, animation }: EntryProps) {
 
     useEffect(() => {
         if (animation > 0) {
-            setDy(y => y + 70);
+            setDy(y => y + 60);
         } else if (animation === -1) {
             setDie(true);
         }
