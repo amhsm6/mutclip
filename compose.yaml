@@ -2,20 +2,7 @@ services:
   server:
     build: server
     image: aantonm/mutclip:server
-    ports:
-      - 5000:5000
-    env_file: .env
-    environment:
-      CI: "1"
-      CLICOLOR_FORCE: "1"
-    tty: true
 
   client:
     build: client
     image: aantonm/mutclip:client
-    ports:
-      - 3000:3000
-    env_file: .env
-    environment:
-      TERM: xterm-256color
-    tty: true

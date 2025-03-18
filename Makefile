@@ -4,9 +4,6 @@ build: proto
 push:
 	docker compose push
 
-pull:
-	docker compose pull
-
 
 init: init-client proto
 
