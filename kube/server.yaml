@@ -4,6 +4,8 @@ metadata:
   name: server
   namespace: mutclip
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
@@ -18,8 +20,8 @@ spec:
         image: aantonm/mutclip:server
         resources:
           limits:
-            memory: 30Mi
-            cpu: 300m
+            memory: 100Mi
+            cpu: 200m
         ports:
         - containerPort: 5000
         envFrom:

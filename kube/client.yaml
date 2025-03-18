@@ -4,6 +4,8 @@ metadata:
   name: client
   namespace: mutclip
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
