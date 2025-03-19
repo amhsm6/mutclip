@@ -44,7 +44,7 @@ export default function IndetifierInput({ setLoad }: Props) {
                     setLoad(false);
                 }
             })
-            .catch(err => setError(err));
+            .catch(() => setError(new Error("Internal Server Error")));
     }, [input]);
 
     return (

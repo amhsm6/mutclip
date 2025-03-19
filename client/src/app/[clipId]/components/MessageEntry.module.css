@@ -6,6 +6,7 @@
     font-size: 1.2rem;
     transition: all 0.4s;
     animation: appear-left 0.3s;
+    direction: ltr;
 }
 
 @media screen and (min-width: 45rem) and (max-width: 60rem) {

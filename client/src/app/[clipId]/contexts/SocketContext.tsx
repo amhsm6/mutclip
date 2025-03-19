@@ -46,9 +46,21 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         const ws = new WebSocket(`/ws/${clipId}`);
         ws.binaryType = "arraybuffer";
 
+        const connDeadline = setTimeout(() => {
+            pushMessage({ type: MessageType.ERROR, text: "Failed to reconnect" });
+            pushMessage({ type: MessageType.INFO, text: "Trying again in 2s" });
+
+            setTimeout(() => {
+                pushMessage({ type: MessageType.INFO, text: "Reconnecting..." });
+                setReconnect(true);
+            }, 2000);
+        }, 3000);
+
         socketRef.current.ws = ws;
 
         ws.onopen = () => {
+            clearTimeout(connDeadline);
+
             socketRef.current.ok = true;
             socketRef.current.reconnecting = false;
             setSocketOk(true);

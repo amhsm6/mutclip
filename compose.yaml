@@ -1,8 +1,0 @@
-services:
-  server:
-    build: server
-    image: aantonm/mutclip:server
-
-  client:
-    build: client
-    image: aantonm/mutclip:client

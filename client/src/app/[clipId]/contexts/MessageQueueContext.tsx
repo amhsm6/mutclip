@@ -50,22 +50,19 @@ export function MessageQueueProvider({ children }: React.PropsWithChildren) {
         spawnDelay.current += 400;
 
         setTimeout(() => {
+            const id = newEntryId.current++;
+
             setEntries(es => [
-                { props: { message, animation: 0 }, id: newEntryId.current++ },
+                { props: { message, animation: 0 }, id },
                 ...es.map(({ props, ...e }) => ({ ...e, props: { ...props, animation: props.animation + 1 } }))
             ]);
+
+            setTimeout(() => {
+                setEntries(es => es.map(e => e.id === id ? { ...e, props: { ...e.props, animation: -1 } } : e));
+                setTimeout(() => setEntries(es => es.filter(e => e.id !== id)), 600);
+            }, 1500);
         }, delay);
     };
-
-    useEffect(() => {
-        if (!entries.length) { return; }
-
-        const id = entries[0].id;
-        setTimeout(() => {
-            setEntries(es => es.map(e => e.id === id ? { ...e, props: { ...e.props, animation: -1 } } : e));
-            setTimeout(() => setEntries(es => es.filter(e => e.id !== id)), 500);
-        }, 1500);
-    }, [entries.length]);
 
     return <MessageQueueContext.Provider value={{ entries, pushMessage }}>{children}</MessageQueueContext.Provider>;
 }

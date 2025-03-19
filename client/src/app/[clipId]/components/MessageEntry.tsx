@@ -12,7 +12,7 @@ export type EntryProps = {
 const remToPx = (rem: number) => rem * parseFloat(getComputedStyle(document.documentElement).fontSize);
 
 export default function MessageEntry({ message, animation }: EntryProps) {
-    const DIRECTION = screen.width > remToPx(45) && screen.width < remToPx(60) ? 1 : -1;
+    const DIRECTION = document.body.clientWidth > remToPx(45) && document.body.clientWidth <= remToPx(60) ? 1 : -1;
 
     let typeclass = "";
 

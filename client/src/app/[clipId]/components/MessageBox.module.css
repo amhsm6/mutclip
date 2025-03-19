@@ -8,3 +8,9 @@
         height: auto;
     }
 }
+
+@media screen and (min-width: 45rem) and (max-width: 60rem) {
+    .box {
+        direction: rtl;
+    }
+}
