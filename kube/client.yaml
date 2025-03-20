@@ -16,20 +16,23 @@ spec:
         app: client
     spec:
       containers:
-      - name: client
-        image: aantonm/mutclip:client
-        resources:
-          limits:
-            memory: 100Mi
-            cpu: 500m
-        ports:
-        - containerPort: 3000
-        envFrom:
-          - secretRef:
-              name: env
-        imagePullPolicy: Always
+        - name: client
+          image: aantonm/mutclip:client
+          resources:
+            requests:
+              memory: 100Mi
+              cpu: 250m
+            limits:
+              memory: 100Mi
+              cpu: 250m
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: env
+          imagePullPolicy: Always
       imagePullSecrets:
-      - name: dockerconfig
+        - name: dockerconfig
 ---
 apiVersion: v1
 kind: Service
@@ -40,5 +43,5 @@ spec:
   selector:
     app: client
   ports:
-  - port: 3000
-    targetPort: 3000
+    - port: 3000
+      targetPort: 3000
