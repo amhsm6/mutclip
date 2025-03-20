@@ -8,7 +8,7 @@ clean: clean-server clean-client clean-proto
 
 
 .PHONY: proto
-proto:
+proto: init-client
 	mkdir -p client/src/pb
 	protoc -I=proto --go_out=server/pkg --ts_proto_out=client/src/pb --plugin=client/node_modules/.bin/protoc-gen-ts_proto proto/*.proto
 
@@ -38,10 +38,10 @@ push-client:
 	docker push aantonm/mutclip:client
 
 dev-client:
-	set -a && . ./.env && set +a && cd client; npm run dev
+	set -a && . ./.env && set +a && cd client && npm run dev
 
 init-client:
 	cd client && npm install
 
 clean-client:
-	rm -rf client/node_modules
+	rm -rf client/node_modules client/.next
