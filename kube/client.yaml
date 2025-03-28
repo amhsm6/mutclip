@@ -20,10 +20,10 @@ spec:
           image: aantonm/mutclip:client
           resources:
             requests:
-              memory: 100Mi
+              memory: 150Mi
               cpu: 250m
             limits:
-              memory: 100Mi
+              memory: 150Mi
               cpu: 250m
           ports:
             - containerPort: 3000
