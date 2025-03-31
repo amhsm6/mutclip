@@ -1,18 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { checkClip } from "../actions";
+import { clipRedirect } from "../actions";
 import InputBox from "./InputBox";
-import { useRouter } from "next/navigation";
 import styles from "./IdentifierInput.module.css";
 
 type Props = {
-    setLoad: React.Dispatch<React.SetStateAction<boolean>>
+    startTransition: React.TransitionStartFunction
 };
 
-export default function IndetifierInput({ setLoad }: Props) {
-    const router = useRouter();
-
+export default function IndetifierInput({ startTransition }: Props) {
     const [cursor, setCursor] = useState(0);
     const [input, setInput] = useState("");
 
@@ -33,18 +30,14 @@ export default function IndetifierInput({ setLoad }: Props) {
 
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
 
-        setLoad(true);
-
-        checkClip(id)
-            .then(ok => {
-                if (ok) {
-                    router.push(`/${id}`);
-                } else {
-                    setNotFound(true);
-                    setLoad(false);
-                }
-            })
-            .catch(() => setError(new Error("Internal Server Error")));
+        startTransition(async () => {
+            const no = await clipRedirect(id)
+            if (no) {
+                setNotFound(true);
+            } else {
+                setError(new Error("Internal Server Error"));
+            }
+        });
     }, [input]);
 
     return (

@@ -1,32 +1,22 @@
 "use client";
 
-import React, { useContext, useEffect, useState } from "react";
-import { newclip } from "./actions";
 import ControlButton from "@/components/ControlButton";
-import IdentifierInput from "./components/IdentifierInput";
-import { useRouter } from "next/navigation";
-import { ClipLoader } from "react-spinners";
-import styles from "./page.module.css";
 import BodyRefContext from "@/contexts/BodyRefContext";
+import { useContext, useEffect, useTransition } from "react";
+import { ClipLoader } from "react-spinners";
+import { clipRedirect } from "./actions";
+import IdentifierInput from "./components/IdentifierInput";
+import styles from "./page.module.css";
 
 export default function Page() {
-    const router = useRouter();
-
     const bodyRef = useContext(BodyRefContext);
 
-    const [load, setLoad] = useState<boolean>(false);
+    const [isPending, startTransition] = useTransition();
 
-    const [error, setError] = useState<Error | null>(null);
-    if (error) { throw error; }
-
-    const generateNew = async () => {
-        try {
-            setLoad(true);
-            const id = await newclip();
-            router.push(`/${id}`);
-        } catch (e) {
-            setError(new Error("Internal server Error"));
-        }
+    const generateNew = () => {
+        startTransition(() => {
+            clipRedirect(undefined);
+        });
     };
 
     useEffect(() => {
@@ -44,12 +34,12 @@ export default function Page() {
 
     return (
         <div className={styles.container}>
-            <div className={styles.generate} >
+            <div className={styles.generate}>
                 <ControlButton onClick={generateNew}>Generate New</ControlButton>
             </div>
-            <IdentifierInput setLoad={setLoad} />
+            <IdentifierInput startTransition={startTransition} />
 
-            {load &&
+            {isPending &&
                 <div className={styles.loader}>
                     <ClipLoader />
                 </div>
