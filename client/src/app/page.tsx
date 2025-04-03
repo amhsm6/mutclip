@@ -14,8 +14,8 @@ export default function Page() {
     const [isPending, startTransition] = useTransition();
 
     const generateNew = () => {
-        startTransition(() => {
-            clipRedirect(undefined);
+        startTransition(async () => {
+            await clipRedirect(undefined);
         });
     };
 

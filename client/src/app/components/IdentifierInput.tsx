@@ -15,9 +15,6 @@ export default function IndetifierInput({ startTransition }: Props) {
 
     const [notFound, setNotFound] = useState(false);
 
-    const [error, setError] = useState<Error | null>(null);
-    if (error) { throw error; }
-
     useEffect(() => {
         cursor < 0 && setCursor(0);
         cursor > 9 && setCursor(9);
@@ -31,11 +28,11 @@ export default function IndetifierInput({ startTransition }: Props) {
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
 
         startTransition(async () => {
-            const no = await clipRedirect(id)
+            const no = await clipRedirect(id);
             if (no) {
                 setNotFound(true);
             } else {
-                setError(new Error("Internal Server Error"));
+                throw new Error("Unknown Error");
             }
         });
     }, [input]);
