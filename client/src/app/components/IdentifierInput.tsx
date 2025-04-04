@@ -31,17 +31,18 @@ export default function IndetifierInput({ startTransition }: Props) {
         if (cursor !== COUNT) { return; }
 
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
-
         startTransition(async () => {
+            let no;
             try {
-                const no = await clipRedirect(id);
-                if (no) {
-                    setNotFound(true);
-                } else {
-                    throw new Error("Unknown Error"); //FIXME
-                }
+                no = await clipRedirect(id);
             } catch {
                 throw new Error("Internal Server Error");
+            }
+
+            if (no) {
+                setNotFound(true);
+            } else {
+                throw new Error("Unknown Error");
             }
         });
     }, [input]);
