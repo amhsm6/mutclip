@@ -15,7 +15,11 @@ export default function Page() {
 
     const generateNew = () => {
         startTransition(async () => {
-            await clipRedirect(undefined);
+            try {
+                await clipRedirect(undefined);
+            } catch {
+                throw new Error("Internal Server Error");
+            }
         });
     };
 

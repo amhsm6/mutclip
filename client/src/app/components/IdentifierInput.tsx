@@ -5,34 +5,43 @@ import { clipRedirect } from "../actions";
 import InputBox from "./InputBox";
 import styles from "./IdentifierInput.module.css";
 
+const COUNT = 6;
+
 type Props = {
     startTransition: React.TransitionStartFunction
 };
 
 export default function IndetifierInput({ startTransition }: Props) {
-    const [cursor, setCursor] = useState(0);
     const [input, setInput] = useState("");
+    const cursor = input.length;
+
+    const next = (c: string) => {
+        cursor < COUNT && setInput(input + c);
+    };
+
+    const prev = () => {
+        cursor > 0 && setInput(input.slice(0, cursor - 1));
+    };
 
     const [notFound, setNotFound] = useState(false);
 
     useEffect(() => {
-        cursor < 0 && setCursor(0);
-        cursor > 9 && setCursor(9);
-    }, [cursor]);
-
-    useEffect(() => {
         setNotFound(false);
 
-        if (input.length !== 6) { return; }
+        if (cursor !== COUNT) { return; }
 
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
 
         startTransition(async () => {
-            const no = await clipRedirect(id);
-            if (no) {
-                setNotFound(true);
-            } else {
-                throw new Error("Unknown Error");
+            try {
+                const no = await clipRedirect(id);
+                if (no) {
+                    setNotFound(true);
+                } else {
+                    throw new Error("Unknown Error"); //FIXME
+                }
+            } catch {
+                throw new Error("Internal Server Error");
             }
         });
     }, [input]);
@@ -44,9 +53,10 @@ export default function IndetifierInput({ startTransition }: Props) {
                     <InputBox
                         key={index}
                         index={index}
+                        count={6}
                         cursor={cursor}
-                        set={c => { setInput(input + c); setCursor(cursor + 1); }}
-                        clear={() => { setInput(input.slice(0, input.length - 1)); setCursor(cursor - 1); }}
+                        next={next}
+                        prev={prev}
                         notFound={notFound}
                     />
                 ))}
@@ -55,9 +65,10 @@ export default function IndetifierInput({ startTransition }: Props) {
                     <InputBox
                         key={index}
                         index={index}
+                        count={6}
                         cursor={cursor}
-                        set={c => { setInput(input + c); setCursor(cursor + 1); }}
-                        clear={() => { setInput(input.slice(0, input.length - 1)); setCursor(cursor - 1); }}
+                        next={next}
+                        prev={prev}
                         notFound={notFound}
                     />
                 ))}
@@ -66,11 +77,11 @@ export default function IndetifierInput({ startTransition }: Props) {
                     <InputBox
                         key={index}
                         index={index}
+                        count={6}
                         cursor={cursor}
-                        set={c => { setInput(input + c); setCursor(cursor + 1); }}
-                        clear={() => { setInput(input.slice(0, input.length - 1)); setCursor(cursor - 1); }}
+                        next={next}
+                        prev={prev}
                         notFound={notFound}
-                        forceLast={index === 5 && cursor === 6}
                     />
                 ))}
             </div>

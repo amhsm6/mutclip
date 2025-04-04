@@ -5,26 +5,31 @@ import styles from "./InputBox.module.css";
 
 type Props = {
     index: number,
+    count: number
     cursor: number,
-    set: (c: string) => void,
-    clear: () => void,
-    notFound: boolean,
-    forceLast?: boolean
+    next: (c: string) => void,
+    prev: () => void,
+    notFound: boolean
 };
 
 //FIXME: firefox .focus() does not work
+//TODO: check to allow entering only alphanumeric
 
-export default function InputBox({ index, cursor, set, clear, notFound, forceLast }: Props) {
+export default function InputBox({ index, count, cursor, next, prev, notFound }: Props) {
+    const isLast = index === count - 1;
+    const lastActive = cursor === count;
+    const isActive = index === cursor || (isLast && lastActive);
+
     const [value, setValue] = useState("");
 
     const ref = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        cursor === index && ref.current?.focus();
+        isActive && ref.current?.focus();
     }, [cursor]);
 
     useEffect(() => {
-        value && set(value);
+        value && next(value);
     }, [value]);
 
     return (
@@ -34,8 +39,8 @@ export default function InputBox({ index, cursor, set, clear, notFound, forceLas
             className={`${styles.input} ${notFound ? styles["not-found"] : styles.ok}`}
             maxLength={1}
             onChange={e => setValue(e.target.value.toLowerCase())}
-            onKeyDown={e => e.key === "Backspace" && clear()}
-            onBlur={() => (cursor === index || forceLast) && ref.current?.focus()}
+            onKeyDown={e => e.key === "Backspace" && prev()}
+            onBlur={() => isActive && ref.current?.focus()}
         />
     );
 }
