@@ -1,0 +1,13 @@
+[package]
+name = "voteapp-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { version = "1.0.97", features = ["backtrace"] }
+axum = "0.8.3"
+env_logger = "0.11.8"
+futures = "0.3.31"
+http = "1.3.1"
+log = "0.4.27"
+tokio = { version = "1.44.1", features = ["rt-multi-thread"] }

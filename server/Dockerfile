@@ -1,20 +1,22 @@
-FROM golang:1.23.4-alpine AS builder
+FROM rust:1.86-slim AS builder
 
 WORKDIR /build
 
-COPY go.mod go.sum .
-RUN go mod download
+COPY Cargo.toml Cargo.lock .
+RUN mkdir src
+COPY .empty.rs src/main.rs
+RUN cargo fetch
+RUN cargo build --release
 
 COPY . .
-RUN go build -o bin/server -ldflags '-s -w' ./cmd/server
-
+RUN cargo build --release
 
 FROM alpine
 
 WORKDIR /app
 
-COPY --from=builder /build/bin/server .
+COPY --from=builder /build/target/release/voteapp-server .
 
 EXPOSE 5000
 
-CMD [ "./server" ]
+CMD [ "./voteapp-server" ]

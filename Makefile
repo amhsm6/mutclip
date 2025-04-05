@@ -10,7 +10,7 @@ clean: clean-server clean-client clean-proto
 .PHONY: proto
 proto: init-client
 	mkdir -p client/src/pb
-	protoc -I=proto --go_out=server/pkg --ts_proto_out=client/src/pb --plugin=client/node_modules/.bin/protoc-gen-ts_proto proto/*.proto
+	protoc -I=proto --ts_proto_out=client/src/pb --plugin=client/node_modules/.bin/protoc-gen-ts_proto proto/*.proto
 
 clean-proto:
 	rm -rf server/pkg/pb client/src/pb
@@ -25,10 +25,10 @@ push-server:
 	docker push aantonm/mutclip:server
 
 dev-server:
-	set -a && . ./.env && set +a && cd server && CI=1 CLICOLOR_FORCE=1 air
+	set -a && . ./.env && set +a && cd server && RUST_BACKTRACE=1 cargo watch -x run
 
 clean-server:
-	rm -rf server/bin
+	cd server && cargo clean
 
 
 build-client:
