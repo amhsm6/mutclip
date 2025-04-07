@@ -1,9 +1,10 @@
 mod engine;
 mod pb;
 
-use futures::prelude::*;
+use futures::channel::mpsc;
+use futures::{prelude::*, StreamExt};
 use futures::stream::BoxStream;
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use axum::Router;
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
@@ -19,9 +20,8 @@ use pb::clip::Message;
 async fn newclip(State(engine): State<Engine>) -> impl IntoResponse {
     let id = engine.generate().await;
 
-    tokio::spawn(engine.start(id));
-
-    id
+    engine.start(id.clone()).await
+        .map
 }
 
 async fn check_clip(State(engine): State<Engine>, Path(id): Path<String>) -> impl IntoResponse {
@@ -36,10 +36,19 @@ async fn ws(State(engine): State<Engine>, Path(id): Path<String>, ws: WebSocketU
     ws.on_upgrade(|ws| async move {
         let (tx, rx) = ws.split();
 
+        let tx = tx
+            .sink_map_err(Error::from)
+            .with(|m: Message| async move {
+                let mut buf =  Vec::new();
+                m.encode(&mut buf)?;
+
+                Ok(axum::extract::ws::Message::Binary(buf.into()))
+            });
+
         let rx = rx
             .map_err(Error::from)
             .flat_map(|m| {
-                let f = || -> Result<BoxStream<Message>> {
+                let f = || -> Result<BoxStream<_>> {
                     match m? {
                         axum::extract::ws::Message::Binary(bytes) => {
                             Ok(Box::pin(stream::once(future::ready(Message::decode(bytes)?))))
@@ -63,19 +72,12 @@ async fn ws(State(engine): State<Engine>, Path(id): Path<String>, ws: WebSocketU
                 }
             });
 
-        let tx = tx
-            .sink_map_err(Error::from)
-            .with(|m: Message| async move {
-                let mut buf =  Vec::new();
-                m.encode(&mut buf)?;
-
-                Ok(axum::extract::ws::Message::Binary(buf.into()))
-            });
-
-        match engine.connect(id, Box::pin(rx), Box::pin(tx)).await {
-            Ok(()) => {}
-            Err(e) => error!("{}\n{}", e, e.backtrace())
-        }
+        match engine.connect(id, Box::pin(tx), Box::pin(rx)).await {
+            Ok(()) => {},
+            Err(e) => {
+                error!("{}\n{}", e, e.backtrace());
+            }
+        };
     })
 }
 
