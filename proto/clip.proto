@@ -1,8 +1,6 @@
 syntax = "proto3";
 
-package mutclip;
-
-option go_package = "pb/clip";
+package clip;
 
 message Message {
     oneof msg {

@@ -8,12 +8,12 @@ clean: clean-server clean-client clean-proto
 
 
 .PHONY: proto
-proto: init-client
-	mkdir -p client/src/pb
-	protoc -I=proto --ts_proto_out=client/src/pb --plugin=client/node_modules/.bin/protoc-gen-ts_proto proto/*.proto
+proto:
+	mkdir -p server/src/pb client/src/pb
+	protoc -I=proto --prost_out=server/src/pb --ts_proto_out=client/src/pb --plugin=client/node_modules/.bin/protoc-gen-ts_proto proto/*.proto
 
 clean-proto:
-	rm -rf server/pkg/pb client/src/pb
+	rm -rf server/src/pb client/src/pb
 
 reproto: clean-proto proto
 

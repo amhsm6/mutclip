@@ -7,7 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
-export const protobufPackage = "mutclip";
+export const protobufPackage = "clip";
 
 export interface Message {
   text?: Text | undefined;
