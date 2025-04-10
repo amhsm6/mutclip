@@ -1,3 +1,4 @@
+use std::ops::Index;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -9,8 +10,10 @@ use log::{error, info};
 use rand::distr::Alphanumeric;
 use rand::prelude::*;
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use uuid::Uuid;
 
+use crate::pb::clip;
 use crate::pb::clip::Message;
 use crate::pb::clip::message::Msg;
 
@@ -28,7 +31,8 @@ struct Clipboard {
     contents: ClipContents,
     clients: HashMap<Uuid, Client>,
     intx: Sender<(Cid, Message)>,
-    inrx: Receiver<(Cid, Message)>
+    inrx: Receiver<(Cid, Message)>,
+    tasks: Vec<JoinHandle<()>>
 }
 
 enum ClipContents {
@@ -38,7 +42,8 @@ enum ClipContents {
 
 struct Client {
     cid: Cid,
-    tx: Tx
+    tx: Tx,
+    tasks: Vec<JoinHandle<()>>
 }
 
 impl Engine {
@@ -69,68 +74,73 @@ impl Engine {
         id
     }
 
-    pub async fn check(&self, id: String) -> bool {
+    pub async fn check(&self, id: &String) -> bool {
         let clips = self.clipboards.lock().await;
-        clips.contains_key(&id)
+        clips.contains_key(id)
     }
 
     pub async fn connect(&self, id: String, mut tx: Tx, rx: Rx) -> Result<()> {
         let mut clips = self.clipboards.lock().await;
 
         let Some(clip) = clips.get_mut(&id) else {
-            tx.send(Message { msg: Some(Msg::Err(crate::pb::clip::Error { desc: "Invalid id".into() })) }).await?;
+            tx.send(Message { msg: Some(Msg::Err(clip::Error { desc: "Invalid id".into() })) }).await?;
             bail!("Invalid id: {id}");
         };
 
         let cid = Uuid::now_v7();
-        let client = Client { cid, tx };
-
-        clip.clients.insert(cid, client);
 
         let intx = clip.intx.clone();
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             rx
                 .map(|m| Ok((cid, m)))
                 .forward(intx).await
                 .unwrap_or_else(|e| error!("{e}"));
         });
 
+        let client = Client { cid, tx, tasks: vec![task] };
+
+        clip.clients.insert(cid, client);
+
         Ok(())
     }
 
     pub async fn start(&self, id: String) -> Result<()> {
-        if !self.clipboards.lock().await.contains_key(&id) {
+        if !self.check(&id).await {
             bail!("Invalid id: {id}");
         }
 
-        let clips = self.clipboards.clone();
-        tokio::spawn(async move {
+        let id = id.clone();
+        let task = tokio::spawn(async move {
             info!("* START {id}");
 
             loop {
-                let Some((cid, m)) = clips.lock().await
-                    .get_mut(&id).unwrap()
-                    .inrx
-                    .next().await else { break; };
+                let clip = self2.clipboards.lock().await 
+                    .get_mut(&id).unwrap();
 
-                let m = match m.msg {
-                    Some(m) => m,
-                    None => {
-                        error!("Received empty message from {cid}");
-                        clips.lock().await
-                            .get_mut(&id).unwrap()
-                            .clients.get_mut(&cid).unwrap()
-                            .tx.send(Message { msg: Some(Msg::Err(crate::pb::clip::Error { desc: "Empty message".into() })) }).await
-                            .unwrap_or_else(|e| error!("{e}"));
-                        
-                        continue;
-                    }
+                let Some((cid, m)) = clip.inrx.next().await else { break; };
+
+                let Some(m) = m.msg else {
+                    error!("Received empty message from {cid}");
+
+                    clip
+                                client.tx.send(Message { msg: Some(Msg::Err(clip::Error { desc: "Empty message".into() })) }).await
+                                    .unwrap_or_else(|e| error!("{e}"));
+                            }
+                            None => error!("Invalid cid: {cid}")
+                        }
+                    }).await;
+                    
+                    continue;
                 };
             
             }
 
             info!("* DONE {id}");
         });
+
+        self.clipboards.lock().await
+            .get_mut(&id2).unwrap()
+            .tasks.push(task);
 
         Ok(())
     }
@@ -143,7 +153,8 @@ impl Clipboard {
             contents: ClipContents::Text("".into()),
             clients: HashMap::new(),
             intx: tx,
-            inrx: rx
+            inrx: rx,
+            tasks: Vec::new()
         }
     }
 }

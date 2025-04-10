@@ -1,12 +1,12 @@
 mod engine;
 mod pb;
 
-use futures::channel::mpsc;
-use futures::{prelude::*, StreamExt};
+use futures::StreamExt;
+use futures::prelude::*;
 use futures::stream::BoxStream;
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{bail, Error, Result};
 use axum::Router;
-use axum::extract::{Path, State, WebSocketUpgrade};
+use axum::extract::{Path, State, WebSocketUpgrade, ws};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use http::StatusCode;
@@ -20,12 +20,17 @@ use pb::clip::Message;
 async fn newclip(State(engine): State<Engine>) -> impl IntoResponse {
     let id = engine.generate().await;
 
-    engine.start(id.clone()).await
-        .map
+    match engine.start(id.clone()).await {
+        Ok(()) => id,
+        Err(e) => {
+            error!("{}\n{}", e, e.backtrace());
+            e.to_string()
+        }
+    }
 }
 
 async fn check_clip(State(engine): State<Engine>, Path(id): Path<String>) -> impl IntoResponse {
-    if engine.check(id).await {
+    if engine.check(&id).await {
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -42,7 +47,7 @@ async fn ws(State(engine): State<Engine>, Path(id): Path<String>, ws: WebSocketU
                 let mut buf =  Vec::new();
                 m.encode(&mut buf)?;
 
-                Ok(axum::extract::ws::Message::Binary(buf.into()))
+                Ok(ws::Message::Binary(buf.into()))
             });
 
         let rx = rx
@@ -50,10 +55,10 @@ async fn ws(State(engine): State<Engine>, Path(id): Path<String>, ws: WebSocketU
             .flat_map(|m| {
                 let f = || -> Result<BoxStream<_>> {
                     match m? {
-                        axum::extract::ws::Message::Binary(bytes) => {
+                        ws::Message::Binary(bytes) => {
                             Ok(Box::pin(stream::once(future::ready(Message::decode(bytes)?))))
                         }
-                        axum::extract::ws::Message::Close(_) => {
+                        ws::Message::Close(_) => {
                             warn!("WebSocket closed");
                             Ok(Box::pin(stream::empty()))
                         }
