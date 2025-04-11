@@ -1,4 +1,4 @@
-build: proto build-server build-client
+build: build-server build-client
 
 push: push-server push-client
 
@@ -8,7 +8,7 @@ clean: clean-server clean-client clean-proto
 
 
 .PHONY: proto
-proto: init-client
+proto:
 	mkdir -p client/src/pb
 	protoc -I=proto --go_out=server/pkg --ts_proto_out=client/src/pb --plugin=client/node_modules/.bin/protoc-gen-ts_proto proto/*.proto
 

@@ -30,7 +30,7 @@ type Clipboard struct {
 	cancel  context.CancelFunc
 }
 
-type Content interface{}
+type Content any
 
 type ContentText struct {
 	data string
@@ -372,8 +372,8 @@ func (s *ClipboardServer) processFile(id ClipboardId, cid net.CID, m *pb.FileHea
 			s.updateClip(id, func(c *Clipboard) { c.content = file })
 
 			log.Infof("[%v] <- %v : OK", id, cid)
-
 			s.syncClip(id, cid)
+
 			return
 
 		case <-tun.Done():
@@ -395,12 +395,12 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 
 	timer := time.NewTimer(ClipDeadline)
 	go func() {
+		defer clip.cancel()
+
 		select {
 		case <-timer.C:
 		case <-clip.ctx.Done():
 		}
-
-		clip.cancel()
 	}()
 
 	for {

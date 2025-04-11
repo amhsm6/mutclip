@@ -141,6 +141,8 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 
 	go func() {
 		defer cancel()
+		defer close(in)
+		defer close(out)
 
 		select {
 		case <-tunCtx.Done():
@@ -150,8 +152,6 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 		time.Sleep(time.Second)
 
 		r.tunnels.Delete(cid)
-		close(in)
-		close(out)
 	}()
 
 	return tun, nil
@@ -173,6 +173,9 @@ func (r *Router) DestroyTunnel(cid CID) error {
 }
 
 func (r *Router) Start() {
+	defer close(r.Source)
+	defer close(r.Drain)
+
 	for {
 		select {
 		case m := <-r.Source:

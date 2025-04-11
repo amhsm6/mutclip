@@ -46,73 +46,73 @@ func main() {
 		},
 	}
 
-	r.GET("/newclip", func(ctx *gin.Context) {
-		id := s.Generate(ctx)
+	r.GET("/newclip", func(c *gin.Context) {
+		id := s.Generate(c)
 
 		go s.Start(id)
 
-		ctx.String(200, id)
+		c.String(200, id)
 	})
 
-	r.GET("/check/:id", func(ctx *gin.Context) {
-		id := ctx.Param("id")
+	r.GET("/check/:id", func(c *gin.Context) {
+		id := c.Param("id")
 		if _, ok := s.Load(id); ok {
-			ctx.Status(200)
+			c.Status(200)
 		} else {
-			ctx.Status(404)
+			c.Status(404)
 		}
 	})
 
-	r.GET("/ws/:id", func(gctx *gin.Context) {
-		id := gctx.Param("id")
+	r.GET("/ws/:id", func(c *gin.Context) {
+		id := c.Param("id")
 
-		ctx, cancel := context.WithCancel(gctx.Request.Context())
+		ctx, cancel := context.WithCancel(c.Request.Context())
 		defer cancel()
 
-		c, err := upgrader.Upgrade(gctx.Writer, gctx.Request, nil)
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			log.Error(err)
+			c.AbortWithStatus(500)
 			return
 		}
 		defer func() {
-			err = c.Close()
+			err = conn.Close()
 			if err != nil {
 				log.Error(err)
+				c.AbortWithStatus(500)
 				return
 			}
 		}()
 
 		send := make(chan net.OutMessage, 15)
+		defer close(send)
 
 		recv, cid, clipCtx, err := s.Connect(id, ctx, send)
 		if err != nil {
 			log.Error(err)
-			c.WriteMessage(websocket.BinaryMessage, net.Out(net.Err(err)))
+			conn.WriteMessage(websocket.BinaryMessage, net.Out(net.Err(err)))
 			return
 		}
 
 		timer := time.NewTimer(ConnDeadline)
 		go func() {
+			defer cancel()
+
 			select {
+			case <-clipCtx.Done():
+
 			case <-timer.C:
 				log.Error("websocket deadline expired")
 
 			case <-ctx.Done():
 			}
-
-			cancel()
-		}()
-
-		go func() {
-			<-clipCtx.Done()
-			cancel()
 		}()
 
 		go func() {
 			defer cancel()
 
 			for {
-				typ, buf, err := c.ReadMessage()
+				typ, buf, err := conn.ReadMessage()
 				if err != nil {
 					log.Error(err)
 					return
@@ -148,7 +148,7 @@ func main() {
 			for {
 				select {
 				case m := <-send:
-					err := c.WriteMessage(websocket.BinaryMessage, net.Out(m))
+					err := conn.WriteMessage(websocket.BinaryMessage, net.Out(m))
 					if err != nil {
 						log.Error(err)
 						return
