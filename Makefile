@@ -1,4 +1,4 @@
-build: proto build-server build-client
+build: build-server build-client
 
 push: push-server push-client
 

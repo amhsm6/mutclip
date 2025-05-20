@@ -1,4 +1,4 @@
-FROM rust:1.86-slim AS builder
+FROM rust:1.87-slim AS builder
 
 WORKDIR /build
 
@@ -17,8 +17,8 @@ FROM alpine
 
 WORKDIR /app
 
-COPY --from=builder /build/target/release/voteapp-server .
+COPY --from=builder /build/target/release/mutclip-server .
 
 EXPOSE 5000
 
-CMD [ "./voteapp-server" ]
+CMD [ "./mutclip-server" ]

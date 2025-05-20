@@ -1,32 +1,27 @@
 mod engine;
+mod result;
 mod pb;
 
-use futures::StreamExt;
+use std::sync::Arc;
+
+use axum::routing;
+use axum::extract::{ws, Path, State, WebSocketUpgrade};
+use axum::response::IntoResponse;
+use axum::Router;
 use futures::prelude::*;
 use futures::stream::BoxStream;
-use anyhow::{bail, Error, Result};
-use axum::Router;
-use axum::extract::{Path, State, WebSocketUpgrade, ws};
-use axum::response::IntoResponse;
-use axum::routing::get;
 use http::StatusCode;
-use log::{error, info, warn, LevelFilter};
-use tokio::net::TcpListener;
+use log::{debug, error, info, warn, LevelFilter};
 use prost::Message as _;
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 use engine::Engine;
+use result::{Result, Error};
 use pb::clip::Message;
 
 async fn newclip(State(engine): State<Engine>) -> impl IntoResponse {
-    let id = engine.generate().await;
-
-    match engine.start(id.clone()).await {
-        Ok(()) => id,
-        Err(e) => {
-            error!("{}\n{}", e, e.backtrace());
-            e.to_string()
-        }
-    }
+    engine.generate().await
 }
 
 async fn check_clip(State(engine): State<Engine>, Path(id): Path<String>) -> impl IntoResponse {
@@ -37,14 +32,18 @@ async fn check_clip(State(engine): State<Engine>, Path(id): Path<String>) -> imp
     }
 }
 
-async fn ws(State(engine): State<Engine>, Path(id): Path<String>, ws: WebSocketUpgrade) -> impl IntoResponse {
+async fn ws(
+    State(engine): State<Engine>,
+    Path(id): Path<String>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
     ws.on_upgrade(|ws| async move {
         let (tx, rx) = ws.split();
 
         let tx = tx
             .sink_map_err(Error::from)
             .with(|m: Message| async move {
-                let mut buf =  Vec::new();
+                let mut buf = Vec::new();
                 m.encode(&mut buf)?;
 
                 Ok(ws::Message::Binary(buf.into()))
@@ -52,45 +51,40 @@ async fn ws(State(engine): State<Engine>, Path(id): Path<String>, ws: WebSocketU
 
         let rx = rx
             .map_err(Error::from)
-            .flat_map(|m| {
+            .flat_map(|m| -> BoxStream<_> {
                 let f = || -> Result<BoxStream<_>> {
                     match m? {
                         ws::Message::Binary(bytes) => {
                             Ok(Box::pin(stream::once(future::ready(Message::decode(bytes)?))))
                         }
                         ws::Message::Close(_) => {
-                            warn!("WebSocket closed");
+                            debug!("WebSocket closed");
                             Ok(Box::pin(stream::empty()))
                         }
                         m => {
-                            bail!("Unexpected websocket message: {m:?}");
+                            Err(Error::UnexpectedMessage(format!("{:?}", m)))
                         }
                     }
                 };
 
                 match f() {
-                    Ok(stream) => stream,
-                    Err(e) => {
-                        error!("{}\n{}", e, e.backtrace());
-                        Box::pin(stream::empty())
-                    }
+                    Ok(stream) => Box::pin(stream.map(Ok)),
+                    Err(e) => Box::pin(stream::once(future::ready(Err(e))))
                 }
             });
 
-        match engine.connect(id, Box::pin(tx), Box::pin(rx)).await {
-            Ok(()) => {},
-            Err(e) => {
-                error!("{}\n{}", e, e.backtrace());
-            }
-        };
+        match engine.connect(&id, tx, rx).await {
+            Ok(()) => {}
+            Err(e) => error!("{:?}\n", e)
+        }
     })
 }
 
 async fn start() -> Result<()> {
     let app = Router::new()
-        .route("/newclip", get(newclip))
-        .route("/check/{id}", get(check_clip))
-        .route("/ws/{id}", get(ws))
+        .route("/newclip", routing::get(newclip))
+        .route("/check/{id}", routing::get(check_clip))
+        .route("/ws/{id}", routing::get(ws))
         .with_state(Engine::new());
 
     info!("Server started on port 5000");
@@ -107,6 +101,6 @@ async fn main() {
 
     match start().await {
         Ok(()) => unreachable!(),
-        Err(e) => error!("{}\n{}", e, e.backtrace())
+        Err(e) => error!("{:?}", e)
     }
 }
