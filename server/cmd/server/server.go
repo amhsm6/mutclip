@@ -20,6 +20,8 @@ import (
 const ConnDeadline = time.Minute
 
 func main() {
+	log.SetReportCaller(true)
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
