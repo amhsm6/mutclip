@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,6 +22,7 @@ const ConnDeadline = time.Minute
 
 func main() {
 	log.SetReportCaller(true)
+	gin.DefaultWriter = io.Discard
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -116,6 +118,10 @@ func main() {
 			for {
 				typ, buf, err := conn.ReadMessage()
 				if err != nil {
+					if ctx.Err() == context.Canceled {
+						return
+					}
+
 					log.Error(err)
 					return
 				}
