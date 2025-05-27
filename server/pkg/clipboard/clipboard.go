@@ -230,7 +230,7 @@ func (s *ClipboardServer) syncClip(id ClipboardId, srcCid net.CID) {
 
 		r.Broadcast(
 			&pb.Message{Msg: &pb.Message_Text{Text: &pb.Text{Data: content.data}}},
-			map[net.CID]struct{}{srcCid: struct{}{}},
+			map[net.CID]struct{}{srcCid: {}},
 		)
 
 	case ContentFile:
@@ -296,7 +296,7 @@ func (s *ClipboardServer) processText(id ClipboardId, cid net.CID, m *pb.Text) {
 	s.syncClip(id, cid)
 }
 
-func (s *ClipboardServer) processFile(id ClipboardId, cid net.CID, m *pb.FileHeader) {
+func (s *ClipboardServer) processFile(id ClipboardId, timer *time.Timer, cid net.CID, m *pb.FileHeader) {
 	clip := s.getClip(id)
 	r := clip.router
 
@@ -335,6 +335,8 @@ func (s *ClipboardServer) processFile(id ClipboardId, cid net.CID, m *pb.FileHea
 	for {
 		select {
 		case m := <-tun.In:
+			timer.Reset(ClipDeadline)
+
 			chunk := m.GetChunk()
 			if chunk == nil {
 				log.Errorf("unexpected message while receiving file")
@@ -414,7 +416,7 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 			}
 
 			if hdr := m.GetHdr(); hdr != nil {
-				go s.processFile(id, m.Cid, hdr)
+				go s.processFile(id, timer, m.Cid, hdr)
 				continue
 			}
 
