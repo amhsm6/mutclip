@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use futures::prelude::*;
-use log::info;
+use log::{error, info};
 use rand::distr::Alphanumeric;
 use rand::Rng;
 use tokio::select;
 use tokio::sync::{broadcast, mpsc};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_util::sync::PollSender;
 use uuid::Uuid;
@@ -124,7 +124,7 @@ impl Engine {
 
 impl Clipboard {
     fn start(id: ClipboardId) -> Clipboard {
-        let (intx, inrx) = mpsc::channel(15);
+        let (intx, mut inrx) = mpsc::channel(15);
         let (context, mut ctx) = broadcast::channel(1);
         let clip = Clipboard {
             contents: Arc::new(Mutex::new("".into())),
@@ -138,7 +138,21 @@ impl Clipboard {
             let clip = clip2;
 
             let task = async {
-                loop {}
+                info!("* START {id}");
+
+                loop {
+                    let Some((client_id, m)) = inrx.recv().await else { break; };
+
+                    match m {
+                        Ok(m) => {
+                            info!("Message from {client_id}: {m:?}");
+                        }
+                        Err(err) => {
+                            error!("Error from {client_id}: {err:?}");
+                            //TODO: send back
+                        }
+                    }
+                }
             };
 
             select! {

@@ -17,6 +17,8 @@ FROM alpine
 
 WORKDIR /app
 
+RUN apk add libc6 libgcc
+
 COPY --from=builder /build/target/release/mutclip-server .
 
 EXPOSE 5000

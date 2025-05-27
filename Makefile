@@ -19,23 +19,23 @@ reproto: clean-proto proto
 
 
 build-server:
-	docker build server -t aantonm/mutclip:server
+	docker build server -t localhost:31509/mutclip-server
 
 push-server:
-	docker push aantonm/mutclip:server
+	docker push localhost:31509/mutclip-server
 
 dev-server:
-	set -a && . ./.env && set +a && cd server && RUST_BACKTRACE=1 cargo watch -x run
+	set -a && . ./.env && set +a && cd server && cargo watch -x run
 
 clean-server:
 	cd server && cargo clean
 
 
 build-client:
-	docker build client -t aantonm/mutclip:client
+	docker build client -t localhost:31509/mutclip-client
 
 push-client:
-	docker push aantonm/mutclip:client
+	docker push localhost:31509/mutclip-client
 
 dev-client:
 	set -a && . ./.env && set +a && cd client && npm run dev

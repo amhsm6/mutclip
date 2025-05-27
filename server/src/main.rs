@@ -25,6 +25,8 @@ async fn newclip(State(engine): State<Engine>) -> impl IntoResponse {
 }
 
 async fn check_clip(State(engine): State<Engine>, Path(id): Path<String>) -> impl IntoResponse {
+    info!("* CHECK {id}");
+
     if engine.check(&id).await {
         StatusCode::OK
     } else {
@@ -35,7 +37,7 @@ async fn check_clip(State(engine): State<Engine>, Path(id): Path<String>) -> imp
 async fn ws(
     State(engine): State<Engine>,
     Path(id): Path<String>,
-    ws: WebSocketUpgrade,
+    ws: WebSocketUpgrade
 ) -> impl IntoResponse {
     ws.on_upgrade(|ws| async move {
         let (tx, rx) = ws.split();
