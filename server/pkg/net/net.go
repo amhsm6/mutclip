@@ -2,7 +2,7 @@ package net
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 )
@@ -30,6 +30,11 @@ type Conn struct {
 	ctx context.Context
 }
 
+var (
+	InvalidCid   = errors.New("Invalid Connection ID")
+	DuplicateTun = errors.New("Duplicate Tunnel")
+)
+
 func NewRouter(ctx context.Context) *Router {
 	return &Router{
 		Source: make(chan InMessage, 15),
@@ -46,9 +51,14 @@ func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
 
 	go func() {
 		select {
+
 		case <-ctx.Done():
+
 		case <-r.ctx.Done():
+
 		}
+
+		time.Sleep(time.Second)
 
 		r.conns.Delete(cid)
 	}()
@@ -59,7 +69,7 @@ func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
 func (r *Router) Send(cid CID, m OutMessage) error {
 	a, ok := r.conns.Load(cid)
 	if !ok {
-		return fmt.Errorf("invalid cid: %v", cid)
+		return InvalidCid
 	}
 
 	conn, ok := a.(*Conn)
@@ -68,6 +78,7 @@ func (r *Router) Send(cid CID, m OutMessage) error {
 	}
 
 	conn.out <- m
+
 	return nil
 }
 
@@ -88,6 +99,7 @@ func (r *Router) Broadcast(m OutMessage, except map[CID]struct{}) {
 		}
 
 		conn.out <- m
+
 		return true
 	})
 }
@@ -95,12 +107,12 @@ func (r *Router) Broadcast(m OutMessage, except map[CID]struct{}) {
 func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	_, ok := r.tunnels.Load(cid)
 	if ok {
-		return nil, fmt.Errorf("duplicate tunnel: %v", cid)
+		return nil, DuplicateTun
 	}
 
 	a, ok := r.conns.Load(cid)
 	if !ok {
-		return nil, fmt.Errorf("invalid cid: %v", cid)
+		return nil, InvalidCid
 	}
 
 	conn, ok := a.(*Conn)
@@ -111,10 +123,10 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	in := make(chan InMessage, 15)
 	out := make(chan OutMessage, 15)
 
-	tunCtx, cancel := context.WithCancel(conn.ctx)
+	ctx, cancel := context.WithCancel(conn.ctx)
 
 	tun := &Tunnel{
-		Context: tunCtx,
+		Context: ctx,
 		Cancel:  cancel,
 		In:      in,
 		Out:     out,
@@ -127,14 +139,16 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 
 		for {
 			select {
+
 			case m := <-out:
 				conn.out <- m
 
-			case <-tunCtx.Done():
+			case <-ctx.Done():
 				return
 
 			case <-r.ctx.Done():
 				return
+
 			}
 		}
 	}()
@@ -145,8 +159,11 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 		defer close(out)
 
 		select {
-		case <-tunCtx.Done():
+
+		case <-ctx.Done():
+
 		case <-r.ctx.Done():
+
 		}
 
 		time.Sleep(time.Second)
@@ -157,27 +174,13 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	return tun, nil
 }
 
-func (r *Router) DestroyTunnel(cid CID) error {
-	a, ok := r.tunnels.LoadAndDelete(cid)
-	if !ok {
-		return fmt.Errorf("invalid tunnel: %v", cid)
-	}
-
-	tun, ok := a.(*Tunnel)
-	if !ok {
-		panic("impossible")
-	}
-
-	tun.Cancel()
-	return nil
-}
-
 func (r *Router) Start() {
 	defer close(r.Source)
 	defer close(r.Drain)
 
 	for {
 		select {
+
 		case m := <-r.Source:
 			sent := false
 			r.tunnels.Range(func(key, val any) bool {
@@ -207,6 +210,7 @@ func (r *Router) Start() {
 
 		case <-r.ctx.Done():
 			return
+
 		}
 	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -70,57 +69,45 @@ func main() {
 	r.GET("/ws/:id", func(c *gin.Context) {
 		id := c.Param("id")
 
-		ctx, cancel := context.WithCancel(c.Request.Context())
-		defer cancel()
-
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			log.Error(err)
 			c.AbortWithStatus(500)
 			return
 		}
-		defer func() {
-			err = conn.Close()
-			if err != nil {
-				log.Error(err)
-				c.AbortWithStatus(500)
-				return
-			}
-		}()
 
-		send := make(chan net.OutMessage, 15)
-		defer close(send)
-
-		recv, cid, clipCtx, err := s.Connect(id, ctx, send)
+		client, err := s.Connect(id, c.Request.Context())
 		if err != nil {
 			log.Error(err)
-			conn.WriteMessage(websocket.BinaryMessage, net.Out(net.Err(err)))
+			conn.WriteMessage(websocket.BinaryMessage, net.Out(net.Fatal(err)))
 			return
 		}
 
 		timer := time.NewTimer(ConnDeadline)
 		go func() {
-			defer cancel()
+			defer client.Cancel()
 
 			select {
-			case <-clipCtx.Done():
 
 			case <-timer.C:
 				log.Error("websocket deadline expired")
 
-			case <-ctx.Done():
+			case <-client.Ctx.Done():
+
 			}
 		}()
 
 		go func() {
-			defer cancel()
+			defer client.Cancel()
 
 			for {
 				typ, buf, err := conn.ReadMessage()
 				if err != nil {
-					if ctx.Err() == context.Canceled {
+					if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
 						return
 					}
+
+					// FIXME: if context gets closed this says error tcp connection closed
 
 					log.Error(err)
 					return
@@ -129,46 +116,54 @@ func main() {
 				timer.Reset(ConnDeadline)
 
 				switch typ {
+
 				case websocket.BinaryMessage:
-					m, err := net.In(cid, buf)
+					m, err := net.In(client.Cid, buf)
 					if err != nil {
 						log.Errorf("unable to parse protobuf message: %v", err)
-						send <- net.Err(fmt.Errorf("unexpected message"))
+						client.Out <- net.Err(fmt.Errorf("unexpected message"))
 						continue
 					}
 
-					recv <- *m
+					client.In <- *m
 
 				case websocket.CloseMessage:
-					log.Warn("websocket closed")
 					return
 
 				default:
 					log.Errorf("unexpected message of type %v: %v", typ, buf)
-					send <- net.Err(fmt.Errorf("unexpected message"))
+					client.Out <- net.Err(fmt.Errorf("unexpected message"))
+
 				}
 			}
 		}()
 
 		go func() {
-			defer cancel()
+			defer client.Cancel()
 
 			for {
 				select {
-				case m := <-send:
+
+				case m := <-client.Out:
 					err := conn.WriteMessage(websocket.BinaryMessage, net.Out(m))
 					if err != nil {
 						log.Error(err)
 						return
 					}
 
-				case <-ctx.Done():
+				case <-client.Ctx.Done():
 					return
+
 				}
 			}
 		}()
 
-		<-ctx.Done()
+		<-client.Ctx.Done()
+
+		err = conn.Close()
+		if err != nil {
+			log.Error(err)
+		}
 	})
 
 	log.Infof("Server started on port 5000")

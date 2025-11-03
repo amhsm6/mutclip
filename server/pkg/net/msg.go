@@ -8,7 +8,6 @@ import (
 
 type InMessage struct {
 	*pb.Message
-
 	Cid CID
 }
 
@@ -35,5 +34,9 @@ func Out(m OutMessage) []byte {
 }
 
 func Err(err error) OutMessage {
-	return &pb.Message{Msg: &pb.Message_Err{Err: &pb.Error{Desc: err.Error()}}}
+	return &pb.Message{Msg: &pb.Message_Err{Err: &pb.Error{Desc: err.Error(), Fatal: false}}}
+}
+
+func Fatal(err error) OutMessage {
+	return &pb.Message{Msg: &pb.Message_Err{Err: &pb.Error{Desc: err.Error(), Fatal: true}}}
 }

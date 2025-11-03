@@ -1,33 +1,31 @@
 syntax = "proto3";
 
-package mutclip;
+package clip;
 
 option go_package = "pb/clip";
 
 message Message {
-    oneof msg {
-        Text text = 1;
-        FileHeader hdr = 2;
-        Chunk chunk = 3;
-        NextChunk nextChunk = 4;
-        Ack ack = 5;
-        Error err = 6;
-    }
+  oneof msg {
+    Text text = 1;
+    FileHeader hdr = 2;
+    Chunk chunk = 3;
+    NextChunk nextChunk = 4;
+    Ack ack = 5;
+    Error err = 6;
+  }
 }
 
-message Text {
-    string data = 1;
-}
+message Text { string data = 1; }
 
 message FileHeader {
-    string filename = 1;
-    string contentType = 2;
-    int32 numChunks = 3;
+  string filename = 1;
+  string contentType = 2;
+  int32 numChunks = 3;
 }
 
 message Chunk {
-    int32 index = 1;
-    bytes data = 2;
+  int32 index = 1;
+  bytes data = 2;
 }
 
 message NextChunk {}
@@ -35,5 +33,6 @@ message NextChunk {}
 message Ack {}
 
 message Error {
-    string desc = 1;
+  bool fatal = 1;
+  string desc = 2;
 }

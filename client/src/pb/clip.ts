@@ -7,7 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 
-export const protobufPackage = "mutclip";
+export const protobufPackage = "clip";
 
 export interface Message {
   text?: Text | undefined;
@@ -40,6 +40,7 @@ export interface Ack {
 }
 
 export interface Error {
+  fatal: boolean;
   desc: string;
 }
 
@@ -498,13 +499,16 @@ export const Ack: MessageFns<Ack> = {
 };
 
 function createBaseError(): Error {
-  return { desc: "" };
+  return { fatal: false, desc: "" };
 }
 
 export const Error: MessageFns<Error> = {
   encode(message: Error, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fatal !== false) {
+      writer.uint32(8).bool(message.fatal);
+    }
     if (message.desc !== "") {
-      writer.uint32(10).string(message.desc);
+      writer.uint32(18).string(message.desc);
     }
     return writer;
   },
@@ -517,7 +521,15 @@ export const Error: MessageFns<Error> = {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1: {
-          if (tag !== 10) {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.fatal = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
             break;
           }
 
@@ -534,11 +546,17 @@ export const Error: MessageFns<Error> = {
   },
 
   fromJSON(object: any): Error {
-    return { desc: isSet(object.desc) ? globalThis.String(object.desc) : "" };
+    return {
+      fatal: isSet(object.fatal) ? globalThis.Boolean(object.fatal) : false,
+      desc: isSet(object.desc) ? globalThis.String(object.desc) : "",
+    };
   },
 
   toJSON(message: Error): unknown {
     const obj: any = {};
+    if (message.fatal !== false) {
+      obj.fatal = message.fatal;
+    }
     if (message.desc !== "") {
       obj.desc = message.desc;
     }
@@ -550,6 +568,7 @@ export const Error: MessageFns<Error> = {
   },
   fromPartial<I extends Exact<DeepPartial<Error>, I>>(object: I): Error {
     const message = createBaseError();
+    message.fatal = object.fatal ?? false;
     message.desc = object.desc ?? "";
     return message;
   },

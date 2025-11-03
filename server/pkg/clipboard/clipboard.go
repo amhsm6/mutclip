@@ -14,7 +14,10 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-const ClipDeadline = time.Minute * 2
+const (
+	ClipDeadline = time.Minute * 2
+	alphabet     = "abcdefghijklmnopqrstuvwxyz"
+)
 
 type ClipboardServer struct {
 	sync.Map
@@ -28,6 +31,16 @@ type Clipboard struct {
 	clients map[net.CID]struct{}
 	ctx     context.Context
 	cancel  context.CancelFunc
+}
+
+type Client struct {
+	Cid net.CID
+
+	In  chan net.InMessage
+	Out chan net.OutMessage
+
+	Ctx    context.Context
+	Cancel context.CancelFunc
 }
 
 type Content any
@@ -49,8 +62,6 @@ func NewServer() *ClipboardServer {
 	return &ClipboardServer{}
 }
 
-const alphabet = "abcdefghijklmnopqrstuvwxyz"
-
 func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
 	id := ""
 	for {
@@ -71,9 +82,7 @@ func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
 		}
 	}
 
-	clipCtx, cancel := context.WithCancel(ctx)
-
-	log.Infof("* GEN %v", id)
+	clipCtx, clipCancel := context.WithCancel(ctx)
 
 	s.Store(
 		id,
@@ -82,29 +91,32 @@ func (s *ClipboardServer) Generate(ctx context.Context) ClipboardId {
 			clients: make(map[net.CID]struct{}),
 			content: ContentText{},
 			ctx:     clipCtx,
-			cancel:  cancel,
+			cancel:  clipCancel,
 		},
 	)
+	log.Infof("* GEN %v", id)
 
 	go func() {
 		<-clipCtx.Done()
 
 		time.Sleep(time.Second)
+
 		s.Delete(id)
+		log.Infof("* END %v", id)
 	}()
 
 	return id
 }
 
 func (s *ClipboardServer) getClip(id ClipboardId) *Clipboard {
-	x, ok := s.Load(id)
+	a, ok := s.Load(id)
 	if !ok {
 		return nil
 	}
 
-	clip, ok := x.(Clipboard)
+	clip, ok := a.(Clipboard)
 	if !ok {
-		return nil
+		panic("impossible")
 	}
 
 	return &clip
@@ -116,23 +128,54 @@ func (s *ClipboardServer) updateClip(id ClipboardId, f func(*Clipboard)) {
 	s.Store(id, *clip)
 }
 
-func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan<- net.OutMessage) (chan<- net.InMessage, net.CID, context.Context, error) {
+func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context) (*Client, error) {
 	clip := s.getClip(id)
 	if clip == nil {
-		return nil, net.CID{}, nil, fmt.Errorf("invalid id: %v", id)
+		return nil, fmt.Errorf("invalid id: %v", id) //FIXME
 	}
 
-	cid := clip.router.Connect(send, ctx)
+	clientCtx, clientCancel := context.WithCancel(ctx)
+
+	out := make(chan net.OutMessage, 15)
+
+	cid := clip.router.Connect(out, clientCtx)
+
+	client := &Client{
+		Cid:    cid,
+		In:     clip.router.Source,
+		Out:    out,
+		Ctx:    clientCtx,
+		Cancel: clientCancel,
+	}
 
 	s.updateClip(id, func(c *Clipboard) { c.clients[cid] = struct{}{} })
-
 	log.Infof("[%v] + %v", id, cid)
 
 	go func() {
+		defer clientCancel()
+
 		select {
-		case <-ctx.Done():
+
+		case <-clientCtx.Done():
+
 		case <-clip.ctx.Done():
+
 		}
+	}()
+
+	go func() {
+		defer clientCancel()
+		defer close(out)
+
+		select {
+
+		case <-clientCtx.Done():
+
+		case <-clip.ctx.Done():
+
+		}
+
+		time.Sleep(time.Millisecond * 500)
 
 		s.updateClip(id, func(c *Clipboard) { delete(c.clients, cid) })
 		log.Infof("[%v] - %v", id, cid)
@@ -141,20 +184,21 @@ func (s *ClipboardServer) Connect(id ClipboardId, ctx context.Context, send chan
 	go func() {
 		time.Sleep(time.Millisecond)
 
-		err := s.syncCid(id, cid)
+		err := s.syncClient(id, cid)
 		if err != nil {
 			log.Error(err)
 		}
 	}()
 
-	return clip.router.Source, cid, clip.ctx, nil
+	return client, nil
 }
 
-func (s *ClipboardServer) syncCid(id ClipboardId, cid net.CID) error {
+func (s *ClipboardServer) syncClient(id ClipboardId, cid net.CID) error {
 	clip := s.getClip(id)
 	r := clip.router
 
 	switch content := clip.content.(type) {
+
 	case ContentText:
 		text := "<empty>"
 		if content.data != "" {
@@ -187,6 +231,7 @@ func (s *ClipboardServer) syncCid(id ClipboardId, cid net.CID) error {
 		idx := 0
 		for {
 			select {
+
 			case m := <-tun.In:
 				if m.GetNextChunk() == nil {
 					log.Errorf("unexpected message while sending file: %v", m)
@@ -208,11 +253,13 @@ func (s *ClipboardServer) syncCid(id ClipboardId, cid net.CID) error {
 
 			case <-tun.Done():
 				return fmt.Errorf("client disconnected while sending file")
+
 			}
 		}
 
 	default:
 		panic("impossible")
+
 	}
 }
 
@@ -221,6 +268,7 @@ func (s *ClipboardServer) syncClip(id ClipboardId, srcCid net.CID) {
 	r := clip.router
 
 	switch content := clip.content.(type) {
+
 	case ContentText:
 		text := "<empty>"
 		if content.data != "" {
@@ -245,7 +293,7 @@ func (s *ClipboardServer) syncClip(id ClipboardId, srcCid net.CID) {
 			go func() {
 				defer wg.Done()
 
-				err := s.syncCid(id, cid)
+				err := s.syncClient(id, cid)
 				if err != nil {
 					log.Error(err)
 				}
@@ -256,6 +304,7 @@ func (s *ClipboardServer) syncClip(id ClipboardId, srcCid net.CID) {
 
 	default:
 		panic("impossible")
+
 	}
 
 	err := r.Send(srcCid, &pb.Message{Msg: &pb.Message_Ack{Ack: &pb.Ack{}}})
@@ -282,6 +331,8 @@ func (s *ClipboardServer) processText(id ClipboardId, cid net.CID, m *pb.Text) {
 	if file, ok := clip.content.(ContentFile); ok {
 		if !file.ready {
 			log.Error("denied while receiving file")
+
+			// send error here?
 
 			err := r.Send(cid, &pb.Message{Msg: &pb.Message_Ack{Ack: &pb.Ack{}}})
 			if err != nil {
@@ -334,6 +385,7 @@ func (s *ClipboardServer) processFile(id ClipboardId, timer *time.Timer, cid net
 
 	for {
 		select {
+
 		case m := <-tun.In:
 			timer.Reset(ClipDeadline)
 
@@ -380,9 +432,9 @@ func (s *ClipboardServer) processFile(id ClipboardId, timer *time.Timer, cid net
 
 		case <-tun.Done():
 			s.updateClip(id, func(c *Clipboard) { c.content = clip.content })
-
 			log.Error("client disconnected while receiving file")
 			return
+
 		}
 	}
 }
@@ -400,13 +452,18 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 		defer clip.cancel()
 
 		select {
+
 		case <-timer.C:
+			log.Error("clip deadline expired")
+
 		case <-clip.ctx.Done():
+
 		}
 	}()
 
 	for {
 		select {
+
 		case m := <-r.Drain:
 			timer.Reset(ClipDeadline)
 
@@ -424,8 +481,8 @@ func (s *ClipboardServer) Start(id ClipboardId) {
 			r.Send(m.Cid, net.Err(fmt.Errorf("unpexpected message")))
 
 		case <-clip.ctx.Done():
-			log.Infof("* END %v", id)
 			return
+
 		}
 	}
 }

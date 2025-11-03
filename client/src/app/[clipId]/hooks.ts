@@ -115,7 +115,7 @@ export function useSocketContents() {
                 return;
             }
 
-            const data = new Blob(fileRecvStateRef.current.chunks.map(chunk => chunk.data));
+            const data = new Blob(fileRecvStateRef.current.chunks.map(chunk => chunk.data as BlobPart));
 
             setContents({
                 type: "file",
@@ -136,8 +136,7 @@ export function useSocketContents() {
             fileRecvStateRef.current = null;
             setSocketState(s => ({ ...s, sending: false, receiving: false }));
 
-            // FIXME
-            if (/invalid id/.test(m.err?.desc)) {
+            if (m.err.fatal) {
                 setSocketState(s => ({ ...s, error: new Error(m.err?.desc) }));
             } else {
                 pushMessage({ type: MessageType.ERROR, text: m.err.desc });
