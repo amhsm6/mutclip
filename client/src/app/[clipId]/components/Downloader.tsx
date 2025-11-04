@@ -18,7 +18,10 @@ export default function Downloader({ contents }: Props) {
 
     const download = () => {
         const downloader = downloaderRef.current;
-        if (!downloader || contents.type === "text") { return; }
+        if (!downloader || contents.type === "text") {
+            pushMessage({ type: MessageType.ERROR, text: "No file to download" });
+            return;
+        }
 
         const name = contents.filename;
 

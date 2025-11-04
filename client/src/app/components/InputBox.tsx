@@ -1,26 +1,22 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import styles from "./InputBox.module.css";
 
 type Props = {
     index: number,
-    count: number
+    count: number,
     cursor: number,
+    input: string,
     next: (c: string) => void,
     prev: () => void,
     notFound: boolean
 };
 
-//FIXME: firefox .focus() does not work
-//TODO: check to allow entering only alphanumeric
-
-export default function InputBox({ index, count, cursor, next, prev, notFound }: Props) {
+export default function InputBox({ index, count, cursor, input, next, prev, notFound }: Props) {
     const isLast = index === count - 1;
     const lastActive = cursor === count;
     const isActive = index === cursor || (isLast && lastActive);
-
-    const [value, setValue] = useState("");
 
     const ref = useRef<HTMLInputElement>(null);
 
@@ -28,18 +24,19 @@ export default function InputBox({ index, count, cursor, next, prev, notFound }:
         isActive && ref.current?.focus();
     }, [cursor]);
 
-    useEffect(() => {
-        value && next(value);
-    }, [value]);
+    const charInput = (c: string) => {
+        /^[a-z0-9]$/.test(c) && next(c);
+    };
 
     return (
         <input
             ref={ref}
-            value={value}
+            value={input[index] || ""}
             className={`${styles.input} ${notFound ? styles["not-found"] : styles.ok}`}
             maxLength={1}
-            onChange={e => setValue(e.target.value.toLowerCase())}
+            onChange={e => charInput(e.target.value.toLowerCase())}
             onKeyDown={e => e.key === "Backspace" && prev()}
+            onFocus={e => !isActive && e.target.blur()}
             onBlur={() => isActive && ref.current?.focus()}
         />
     );

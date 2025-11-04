@@ -56,6 +56,7 @@ export default function IndetifierInput({ startTransition }: Props) {
                         index={index}
                         count={6}
                         cursor={cursor}
+                        input={input}
                         next={next}
                         prev={prev}
                         notFound={notFound}
@@ -68,6 +69,7 @@ export default function IndetifierInput({ startTransition }: Props) {
                         index={index}
                         count={6}
                         cursor={cursor}
+                        input={input}
                         next={next}
                         prev={prev}
                         notFound={notFound}
@@ -80,6 +82,7 @@ export default function IndetifierInput({ startTransition }: Props) {
                         index={index}
                         count={6}
                         cursor={cursor}
+                        input={input}
                         next={next}
                         prev={prev}
                         notFound={notFound}

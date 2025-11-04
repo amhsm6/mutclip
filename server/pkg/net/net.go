@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 )
 
 type Router struct {
@@ -31,22 +30,34 @@ type Conn struct {
 }
 
 var (
-	InvalidCid   = errors.New("Invalid Connection ID")
-	DuplicateTun = errors.New("Duplicate Tunnel")
+	ErrInvalidCid   = errors.New("invalid connection id")
+	ErrDuplicateTun = errors.New("duplicate tunnel")
 )
 
 func NewRouter(ctx context.Context) *Router {
-	return &Router{
-		Source: make(chan InMessage, 15),
-		Drain:  make(chan InMessage, 15),
+	source := make(chan InMessage, 15)
+	drain := make(chan InMessage, 15)
+	router := &Router{
+		Source: source,
+		Drain:  drain,
 		ctx:    ctx,
 	}
+
+	go func() {
+		<-ctx.Done()
+
+		close(source)
+		close(drain)
+	}()
+
+	return router
 }
 
 func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
 	cid := newCID()
 
 	conn := &Conn{out, ctx}
+
 	r.conns.Store(cid, conn)
 
 	go func() {
@@ -58,8 +69,6 @@ func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
 
 		}
 
-		time.Sleep(time.Second)
-
 		r.conns.Delete(cid)
 	}()
 
@@ -69,7 +78,7 @@ func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
 func (r *Router) Send(cid CID, m OutMessage) error {
 	a, ok := r.conns.Load(cid)
 	if !ok {
-		return InvalidCid
+		return ErrInvalidCid
 	}
 
 	conn, ok := a.(*Conn)
@@ -107,12 +116,12 @@ func (r *Router) Broadcast(m OutMessage, except map[CID]struct{}) {
 func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	_, ok := r.tunnels.Load(cid)
 	if ok {
-		return nil, DuplicateTun
+		return nil, ErrDuplicateTun
 	}
 
 	a, ok := r.conns.Load(cid)
 	if !ok {
-		return nil, InvalidCid
+		return nil, ErrInvalidCid
 	}
 
 	conn, ok := a.(*Conn)
@@ -120,10 +129,10 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 		panic("impossible")
 	}
 
+	ctx, cancel := context.WithCancel(conn.ctx)
+
 	in := make(chan InMessage, 15)
 	out := make(chan OutMessage, 15)
-
-	ctx, cancel := context.WithCancel(conn.ctx)
 
 	tun := &Tunnel{
 		Context: ctx,
@@ -154,19 +163,10 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	}()
 
 	go func() {
-		defer cancel()
-		defer close(in)
-		defer close(out)
+		<-ctx.Done()
 
-		select {
-
-		case <-ctx.Done():
-
-		case <-r.ctx.Done():
-
-		}
-
-		time.Sleep(time.Second)
+		close(in)
+		close(out)
 
 		r.tunnels.Delete(cid)
 	}()
@@ -175,9 +175,6 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 }
 
 func (r *Router) Start() {
-	defer close(r.Source)
-	defer close(r.Drain)
-
 	for {
 		select {
 

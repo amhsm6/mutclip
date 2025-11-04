@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"mutclip/pkg/clipboard"
+	"mutclip/pkg/clipservice"
 	"mutclip/pkg/net"
 
 	"github.com/charmbracelet/log"
@@ -20,13 +20,12 @@ import (
 const ConnDeadline = time.Minute
 
 func main() {
-	log.SetReportCaller(true)
 	gin.DefaultWriter = io.Discard
-
 	gin.SetMode(gin.ReleaseMode)
+
 	r := gin.Default()
 
-	s := clipboard.NewServer()
+	s := clipservice.NewService()
 
 	origins := make(map[string]struct{})
 	for _, o := range strings.Split(os.Getenv("ORIGINS"), " ") {
@@ -59,7 +58,7 @@ func main() {
 
 	r.GET("/check/:id", func(c *gin.Context) {
 		id := c.Param("id")
-		if _, ok := s.Load(id); ok {
+		if s.Check(id) {
 			c.Status(200)
 		} else {
 			c.Status(404)
@@ -85,16 +84,16 @@ func main() {
 
 		timer := time.NewTimer(ConnDeadline)
 		go func() {
-			defer client.Cancel()
-
 			select {
 
 			case <-timer.C:
 				log.Error("websocket deadline expired")
 
-			case <-client.Ctx.Done():
+			case <-client.Done():
 
 			}
+
+			client.Cancel()
 		}()
 
 		go func() {
@@ -103,11 +102,18 @@ func main() {
 			for {
 				typ, buf, err := conn.ReadMessage()
 				if err != nil {
-					if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
+					if _, ok := err.(*websocket.CloseError); ok {
 						return
 					}
 
-					// FIXME: if context gets closed this says error tcp connection closed
+					select {
+
+					case <-client.Done():
+						return
+
+					default:
+
+					}
 
 					log.Error(err)
 					return
@@ -147,18 +153,27 @@ func main() {
 				case m := <-client.Out:
 					err := conn.WriteMessage(websocket.BinaryMessage, net.Out(m))
 					if err != nil {
+						select {
+
+						case <-client.Done():
+							return
+
+						default:
+
+						}
+
 						log.Error(err)
 						return
 					}
 
-				case <-client.Ctx.Done():
+				case <-client.Done():
 					return
 
 				}
 			}
 		}()
 
-		<-client.Ctx.Done()
+		<-client.Done()
 
 		err = conn.Close()
 		if err != nil {
