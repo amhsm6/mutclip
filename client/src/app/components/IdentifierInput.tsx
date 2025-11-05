@@ -32,17 +32,11 @@ export default function IndetifierInput({ startTransition }: Props) {
 
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
         startTransition(async () => {
-            let no;
-            try {
-                no = await clipRedirect(id);
-            } catch {
-                throw new Error("Internal Server Error");
-            }
-
+            const no = await clipRedirect(id);
             if (no) {
                 setNotFound(true);
             } else {
-                throw new Error("Unknown Error");
+                throw new Error("Impossible");
             }
         });
     }, [input]);
@@ -54,7 +48,7 @@ export default function IndetifierInput({ startTransition }: Props) {
                     <InputBox
                         key={index}
                         index={index}
-                        count={6}
+                        count={COUNT}
                         cursor={cursor}
                         input={input}
                         next={next}
@@ -67,7 +61,7 @@ export default function IndetifierInput({ startTransition }: Props) {
                     <InputBox
                         key={index}
                         index={index}
-                        count={6}
+                        count={COUNT}
                         cursor={cursor}
                         input={input}
                         next={next}
@@ -80,7 +74,7 @@ export default function IndetifierInput({ startTransition }: Props) {
                     <InputBox
                         key={index}
                         index={index}
-                        count={6}
+                        count={COUNT}
                         cursor={cursor}
                         input={input}
                         next={next}

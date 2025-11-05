@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-    reactStrictMode: false,
+    output: "standalone",
     env: {
         SERVER: process.env.SERVER
     },
