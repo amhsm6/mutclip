@@ -149,7 +149,11 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 		for {
 			select {
 
-			case m := <-out:
+			case m, ok := <-out:
+				if !ok {
+					return
+				}
+
 				conn.out <- m
 
 			case <-ctx.Done():
@@ -178,7 +182,11 @@ func (r *Router) Start() {
 	for {
 		select {
 
-		case m := <-r.Source:
+		case m, ok := <-r.Source:
+			if !ok {
+				return
+			}
+
 			sent := false
 			r.tunnels.Range(func(key, val any) bool {
 				cid, ok := key.(CID)

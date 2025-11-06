@@ -150,7 +150,11 @@ func main() {
 			for {
 				select {
 
-				case m := <-client.Out:
+				case m, ok := <-client.Out:
+					if !ok {
+						return
+					}
+
 					err := conn.WriteMessage(websocket.BinaryMessage, net.Out(m))
 					if err != nil {
 						select {

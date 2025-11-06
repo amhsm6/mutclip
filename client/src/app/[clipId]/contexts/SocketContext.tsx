@@ -18,8 +18,7 @@ export default SocketContext;
 
 type WS = {
     ws: WebSocket | null,
-    ok: boolean,
-    reconnecting: boolean
+    ok: boolean
 };
 
 type Props = {
@@ -27,15 +26,15 @@ type Props = {
 };
 
 export function SocketProvider({ clipId, children }: React.PropsWithChildren<Props>) {
-    const socketRef = useRef<WS>({ ws: null, ok: false, reconnecting: false });
-    const [reconnect, setReconnect] = useState<boolean>(false);
+    const socketRef = useRef<WS>({ ws: null, ok: false });
+    const [reconnect, setReconnect] = useState(false);
 
     const [outQueue, setOutQueue] = useState<Message[]>([]);
     const [inQueue, setInQueue] = useState<Message[]>([]);
 
     const sendMessage: SendMessage = m => setOutQueue([...outQueue, m]);
 
-    const [socketOk, setSocketOk] = useState<boolean>(false);
+    const [socketOk, setSocketOk] = useState(false);
 
     const { pushMessage } = useContext(MessageQueueContext);
 
@@ -45,6 +44,8 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
 
         const ws = new WebSocket(`/ws/${clipId}`);
         ws.binaryType = "arraybuffer";
+
+        socketRef.current.ws = ws;
 
         const connDeadline = setTimeout(() => {
             pushMessage({ type: MessageType.ERROR, text: "Failed to reconnect" });
@@ -56,13 +57,10 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
             }, 2000);
         }, 3000);
 
-        socketRef.current.ws = ws;
-
         ws.onopen = () => {
             clearTimeout(connDeadline);
 
             socketRef.current.ok = true;
-            socketRef.current.reconnecting = false;
             setSocketOk(true);
             pushMessage({ type: MessageType.SUCCESS, text: "Server Connected" });
         };
@@ -74,16 +72,13 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
             }
 
             const m = Message.decode(new Uint8Array(msg.data));
-
             setInQueue(q => [...q, m]);
         };
 
         ws.onerror = () => {
-            if (socketRef.current.reconnecting) { return; }
+            if (!socketRef.current.ok || ws.readyState == ws.CLOSED) { return; }
 
             socketRef.current.ok = false;
-            socketRef.current.ws = null;
-            socketRef.current.reconnecting = true;
             setSocketOk(false);
 
             ws.close();
@@ -98,14 +93,10 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         };
 
         ws.onclose = () => {
-            if (socketRef.current.reconnecting) { return; }
+            if (!socketRef.current.ok || ws.readyState == ws.CLOSED) { return; }
 
             socketRef.current.ok = false;
-            socketRef.current.ws = null;
-            socketRef.current.reconnecting = true;
             setSocketOk(false);
-
-            ws.close();
 
             pushMessage({ type: MessageType.ERROR, text: "Websocket Closed Unexpectedly" });
             pushMessage({ type: MessageType.INFO, text: "Reconnecting in 2s" });
@@ -122,13 +113,9 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         setReconnect(true);
 
         return () => {
-            const ws = socketRef.current.ws;
-
-            socketRef.current.ok = false;
-            socketRef.current.ws = null;
             setSocketOk(false);
-
-            ws?.close();
+            socketRef.current.ok = false;
+            socketRef.current.ws?.close();
         };
     }, []);
 

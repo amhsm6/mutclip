@@ -228,7 +228,11 @@ func (s *ClipboardService) syncClient(id ClipboardId, cid net.CID) error {
 		for {
 			select {
 
-			case m := <-tun.In:
+			case m, ok := <-tun.In:
+				if !ok {
+					return ErrClientDisconnected
+				}
+
 				if m.GetNextChunk() == nil {
 					log.Errorf("unexpected message while sending file: %v", m)
 					tun.Out <- net.Err(fmt.Errorf("unexpected message"))
@@ -384,7 +388,13 @@ func (s *ClipboardService) processFile(id ClipboardId, timer *time.Timer, cid ne
 	for {
 		select {
 
-		case m := <-tun.In:
+		case m, ok := <-tun.In:
+			if !ok {
+				clip.content = originalContent
+				log.Error("client disconnected while receiving file")
+				return
+			}
+
 			timer.Reset(ClipDeadline)
 
 			chunk := m.GetChunk()
@@ -462,7 +472,11 @@ func (s *ClipboardService) Start(id ClipboardId) {
 	for {
 		select {
 
-		case m := <-r.Drain:
+		case m, ok := <-r.Drain:
+			if !ok {
+				return
+			}
+
 			timer.Reset(ClipDeadline)
 
 			if text := m.GetText(); text != nil {

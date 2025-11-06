@@ -145,6 +145,7 @@ export function useSocketContents() {
             setFileSendState(null);
             fileRecvStateRef.current = null;
             setSocketState(s => ({ ...s, sending: false, receiving: false }));
+            console.log(m)
 
             pushMessage({ type: MessageType.ERROR, text: "Unexpected message" });
         }
