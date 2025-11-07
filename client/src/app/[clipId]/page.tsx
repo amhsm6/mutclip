@@ -12,8 +12,8 @@ interface Props {
 
 export default async function Page({ params }: Props) {
     const clipId = (await params).clipId
-    const ok = await checkClip(clipId)
 
+    const ok = await checkClip(clipId)
     if (!ok) { notFound() }
 
     return (

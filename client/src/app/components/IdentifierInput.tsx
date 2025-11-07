@@ -32,12 +32,8 @@ export default function IndetifierInput({ startTransition }: Props) {
 
         const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6)
         startTransition(async () => {
-            const no = await clipRedirect(id)
-            if (no) {
-                setNotFound(true)
-            } else {
-                throw new Error("Impossible")
-            }
+            await clipRedirect(id)
+            setNotFound(true)
         })
     }, [input])
 

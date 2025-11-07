@@ -28,7 +28,7 @@ export async function checkClip(id: string) {
 export async function clipRedirect(id: string | null) {
     if (id) {
         if (!await checkClip(id)) {
-            return true
+            return
         }
 
         redirect(`/${id}`)

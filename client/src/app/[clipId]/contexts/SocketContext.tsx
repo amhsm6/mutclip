@@ -5,12 +5,10 @@ import { Message } from "@/pb/clip"
 import MessageQueueContext, { MessageType } from "./MessageQueueContext"
 
 interface Socket {
-    sendMessage: SendMessage
+    sendMessage: (m: Message) => void
     queue: Message[]
     socketOk: boolean
 }
-
-type SendMessage = (m: Message) => void
 
 const SocketContext = createContext<Socket>({ sendMessage: () => { }, queue: [], socketOk: false })
 
@@ -32,7 +30,7 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
     const [outQueue, setOutQueue] = useState<Message[]>([])
     const [inQueue, setInQueue] = useState<Message[]>([])
 
-    const sendMessage: SendMessage = m => setOutQueue([...outQueue, m])
+    const sendMessage = (m: Message) => setOutQueue([...outQueue, m])
 
     const [socketOk, setSocketOk] = useState(false)
 
@@ -76,7 +74,7 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         }
 
         ws.onerror = () => {
-            if (!socketRef.current.ok || ws.readyState == ws.CLOSED) { return }
+            if (!socketRef.current.ok) { return }
 
             socketRef.current.ok = false
             setSocketOk(false)
@@ -93,7 +91,7 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         }
 
         ws.onclose = () => {
-            if (!socketRef.current.ok || ws.readyState == ws.CLOSED) { return }
+            if (!socketRef.current.ok) { return }
 
             socketRef.current.ok = false
             setSocketOk(false)
@@ -112,7 +110,16 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." })
         setReconnect(true)
 
+        // TODO: dedup
+        window.onbeforeunload = () => {
+            setSocketOk(false)
+            socketRef.current.ok = false
+            socketRef.current.ws?.close()
+        }
+
         return () => {
+            window.onbeforeunload = null
+
             setSocketOk(false)
             socketRef.current.ok = false
             socketRef.current.ws?.close()

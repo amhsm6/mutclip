@@ -27,20 +27,18 @@ export default function Clipboard({ clipId }: Props) {
     const bodyRef = useContext(BodyRefContext)
     const inputRef = useRef<HTMLTextAreaElement>(null)
 
-    if (socketState.error) { throw socketState.error };
-
     useEffect(() => {
         if (contents.type === "text") {
             setRenderedContents(contents.data)
         } else {
             setRenderedContents(`${contents.filename}: ${contents.contentType}`)
         }
-    }, [contents.data, contents.incoming])
+    }, [contents.data]) // TODO: why do we need incoming?
 
     const copy = () => {
         if (!inputRef.current) { return }
-        ClipboardJS.copy(inputRef.current)
 
+        ClipboardJS.copy(inputRef.current)
         pushMessage({ type: MessageType.INFO, text: "Copied" })
     }
 
@@ -52,7 +50,6 @@ export default function Clipboard({ clipId }: Props) {
         switch (item.kind) {
             case "string":
                 item.getAsString(setText)
-
                 break
 
             case "file":
@@ -60,7 +57,6 @@ export default function Clipboard({ clipId }: Props) {
                 if (!file) { break }
 
                 setFile(file)
-
                 break
 
             default:
@@ -70,7 +66,6 @@ export default function Clipboard({ clipId }: Props) {
     useEffect(() => {
         const body = bodyRef.current
         const input = inputRef.current
-
         if (!body || !input) { return }
 
         body.onpaste = paste
@@ -89,6 +84,8 @@ export default function Clipboard({ clipId }: Props) {
         }
     }, [reset])
 
+    if (socketState.error) { throw socketState.error }
+
     return (
         <div className={styles.content}>
             <div className={styles.main}>
@@ -101,7 +98,7 @@ export default function Clipboard({ clipId }: Props) {
                         ref={inputRef}
                         value={renderedContents}
                         onChange={e => setText(e.target.value)}
-                        disabled={contents.type === "file" || !socketState.connected || socketState.receiving}
+                        disabled={contents.type === "file" || !socketState.connected || socketState.sending || socketState.receiving}
                         autoFocus
                         rows={10}
                     />

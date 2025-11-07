@@ -16,15 +16,13 @@ export enum MessageType {
 
 interface MessageQueue {
     entries: Entry[]
-    pushMessage: PushMessage
+    pushMessage: (m: Message) => void
 }
 
 interface Entry {
     props: EntryProps
     id: number
 }
-
-type PushMessage = (m: Message) => void
 
 const MessageQueueContext = createContext<MessageQueue>({ entries: [], pushMessage: () => { } })
 
@@ -45,7 +43,7 @@ export function MessageQueueProvider({ children }: React.PropsWithChildren) {
         return () => clearInterval(interval)
     }, [])
 
-    const pushMessage: PushMessage = message => {
+    const pushMessage = (message: Message) => {
         const delay = spawnDelay.current
         spawnDelay.current += 400
 
@@ -64,5 +62,9 @@ export function MessageQueueProvider({ children }: React.PropsWithChildren) {
         }, delay)
     }
 
-    return <MessageQueueContext.Provider value={{ entries, pushMessage }}>{children}</MessageQueueContext.Provider>
+    return (
+        <MessageQueueContext.Provider value={{ entries, pushMessage }}>
+            {children}
+        </MessageQueueContext.Provider>
+    )
 }

@@ -2,7 +2,7 @@
 
 import { useContext, useRef } from "react"
 import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext"
-import { Contents } from "../types/clipboard"
+import type { Contents } from "../types/clipboard"
 import ControlButton from "@/components/ControlButton"
 import { FaDownload } from "react-icons/fa6"
 import styles from "./Downloader.module.css"

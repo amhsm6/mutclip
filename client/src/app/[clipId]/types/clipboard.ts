@@ -1,4 +1,4 @@
-import { Chunk } from "@/pb/clip"
+import type { Chunk } from "@/pb/clip"
 
 interface TextContents {
     type: "text"

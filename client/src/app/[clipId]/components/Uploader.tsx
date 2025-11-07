@@ -6,7 +6,7 @@ import { FaUpload } from "react-icons/fa6"
 import styles from "./Uploader.module.css"
 
 interface Props {
-    setFile: (file: File) => void,
+    setFile: (file: File) => void
     disabled: boolean
 }
 

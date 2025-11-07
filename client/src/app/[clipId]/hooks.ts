@@ -4,7 +4,7 @@ import { useState, useEffect, useContext, useRef } from "react"
 import SocketContext from "./contexts/SocketContext"
 import MessageQueueContext, { MessageType } from "./contexts/MessageQueueContext"
 import type { Contents } from "./types/clipboard"
-import { FileHeader, Message, Chunk } from "@/pb/clip"
+import { type FileHeader, Message, type Chunk } from "@/pb/clip"
 
 interface FileSendState {
     nextChunk: number
@@ -34,6 +34,11 @@ const cut = async (data: Blob) => {
 }
 
 // TODO: refactor to global state object of types sending text, sending file, receiving file ...
+// FIXME: if server delay is big, than if one client starts sending text, then other client starts sending another text,
+// first client receives new text but does not cancel its send operation, thus other client receives different text. clients desyncronized
+
+// FIXME: also if while client is receiving file, it sends message (starts sending before, timeout, message send in-flight)
+// server awaits new chunks but client thinks it's sending text so ignores messages
 
 interface SocketState {
     connected: boolean
@@ -55,7 +60,7 @@ export function useSocketContents() {
     const [socketState, setSocketState] = useState<SocketState>({
         connected: false,
         sending: false,
-        receiving: false,
+        receiving: false, // TODO: initial receive
         error: null
     })
 
@@ -68,7 +73,7 @@ export function useSocketContents() {
 
             setSocketState(s => ({ ...s, sending: false, receiving: false }))
         }
-    }, [socketOk, fileSendState])
+    }, [socketOk]) // TODO: why do we need fileSendState?
 
     useEffect(() => {
         const m = queue.shift()
@@ -132,20 +137,21 @@ export function useSocketContents() {
             setFileSendState(null)
             setSocketState(s => ({ ...s, sending: false }))
         } else if (m.err) {
+            const err = m.err
+
             setFileSendState(null)
             fileRecvStateRef.current = null
             setSocketState(s => ({ ...s, sending: false, receiving: false }))
 
-            if (m.err.fatal) {
-                setSocketState(s => ({ ...s, error: new Error(m.err?.desc) }))
+            if (err.fatal) {
+                setSocketState(s => ({ ...s, error: new Error(err.desc) }))
             } else {
-                pushMessage({ type: MessageType.ERROR, text: m.err.desc })
+                pushMessage({ type: MessageType.ERROR, text: err.desc })
             }
         } else {
             setFileSendState(null)
             fileRecvStateRef.current = null
             setSocketState(s => ({ ...s, sending: false, receiving: false }))
-            console.log(m)
 
             pushMessage({ type: MessageType.ERROR, text: "Unexpected message" })
         }
