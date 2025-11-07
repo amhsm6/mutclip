@@ -1,36 +1,36 @@
-"use client";
+"use client"
 
-import React, { useContext, useRef } from "react";
-import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext";
-import { Contents } from "../types/clipboard";
-import ControlButton from "@/components/ControlButton";
-import { FaDownload } from "react-icons/fa6";
-import styles from "./Downloader.module.css";
+import { useContext, useRef } from "react"
+import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext"
+import { Contents } from "../types/clipboard"
+import ControlButton from "@/components/ControlButton"
+import { FaDownload } from "react-icons/fa6"
+import styles from "./Downloader.module.css"
 
-type Props = {
+interface Props {
     contents: Contents
-};
+}
 
 export default function Downloader({ contents }: Props) {
-    const { pushMessage } = useContext(MessageQueueContext);
+    const { pushMessage } = useContext(MessageQueueContext)
 
-    const downloaderRef = useRef<HTMLAnchorElement>(null);
+    const downloaderRef = useRef<HTMLAnchorElement>(null)
 
     const download = () => {
-        const downloader = downloaderRef.current;
+        const downloader = downloaderRef.current
         if (!downloader || contents.type === "text") {
-            pushMessage({ type: MessageType.ERROR, text: "No file to download" });
-            return;
+            pushMessage({ type: MessageType.ERROR, text: "No file to download" })
+            return
         }
 
-        const name = contents.filename;
+        const name = contents.filename
 
-        pushMessage({ type: MessageType.INFO, text: `Downloading ${name}` });
+        pushMessage({ type: MessageType.INFO, text: `Downloading ${name}` })
 
-        downloader.href = URL.createObjectURL(contents.data);
-        downloader.download = name;
-        downloader.click();
-    };
+        downloader.href = URL.createObjectURL(contents.data)
+        downloader.download = name
+        downloader.click()
+    }
 
     return (
         <>
@@ -39,5 +39,5 @@ export default function Downloader({ contents }: Props) {
             </ControlButton>
             <a ref={downloaderRef} style={{ display: "none" }}></a>
         </>
-    );
+    )
 }

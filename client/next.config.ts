@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
     output: "standalone",
@@ -17,11 +17,11 @@ const nextConfig: NextConfig = {
                     source: "/ws/:path*",
                     destination: `http://${process.env.SERVER}:5000/ws/:path*`
                 }
-            ];
+            ]
         }
 
-        return [];
+        return []
     }
-};
+}
 
-export default nextConfig;
+export default nextConfig

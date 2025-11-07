@@ -1,45 +1,45 @@
-"use client";
+"use client"
 
-import React, { useState, useEffect } from "react";
-import { clipRedirect } from "../actions";
-import InputBox from "./InputBox";
-import styles from "./IdentifierInput.module.css";
+import React, { useState, useEffect } from "react"
+import { clipRedirect } from "../actions"
+import InputBox from "./InputBox"
+import styles from "./IdentifierInput.module.css"
 
-const COUNT = 6;
+const COUNT = 6
 
-type Props = {
+interface Props {
     startTransition: React.TransitionStartFunction
-};
+}
 
 export default function IndetifierInput({ startTransition }: Props) {
-    const [input, setInput] = useState("");
-    const cursor = input.length;
+    const [input, setInput] = useState("")
+    const cursor = input.length
 
     const next = (c: string) => {
-        cursor < COUNT && setInput(input + c);
-    };
+        cursor < COUNT && setInput(input + c)
+    }
 
     const prev = () => {
-        cursor > 0 && setInput(input.slice(0, cursor - 1));
-    };
+        cursor > 0 && setInput(input.slice(0, cursor - 1))
+    }
 
-    const [notFound, setNotFound] = useState(false);
+    const [notFound, setNotFound] = useState(false)
 
     useEffect(() => {
-        setNotFound(false);
+        setNotFound(false)
 
-        if (cursor !== COUNT) { return; }
+        if (cursor !== COUNT) { return }
 
-        const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6);
+        const id = input.slice(0, 2) + "-" + input.slice(2, 4) + "-" + input.slice(4, 6)
         startTransition(async () => {
-            const no = await clipRedirect(id);
+            const no = await clipRedirect(id)
             if (no) {
-                setNotFound(true);
+                setNotFound(true)
             } else {
-                throw new Error("Impossible");
+                throw new Error("Impossible")
             }
-        });
-    }, [input]);
+        })
+    }, [input])
 
     return (
         <div className={styles.container}>
@@ -84,5 +84,5 @@ export default function IndetifierInput({ startTransition }: Props) {
                 ))}
             </div>
         </div>
-    );
+    )
 }

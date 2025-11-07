@@ -1,32 +1,32 @@
-"use client";
+"use client"
 
-import React, { useEffect, useRef } from "react";
-import styles from "./InputBox.module.css";
+import { useEffect, useRef } from "react"
+import styles from "./InputBox.module.css"
 
-type Props = {
-    index: number,
-    count: number,
-    cursor: number,
-    input: string,
-    next: (c: string) => void,
-    prev: () => void,
+interface Props {
+    index: number
+    count: number
+    cursor: number
+    input: string
+    next: (c: string) => void
+    prev: () => void
     notFound: boolean
-};
+}
 
 export default function InputBox({ index, count, cursor, input, next, prev, notFound }: Props) {
-    const isLast = index === count - 1;
-    const lastActive = cursor === count;
-    const isActive = index === cursor || (isLast && lastActive);
+    const isLast = index === count - 1
+    const lastActive = cursor === count
+    const isActive = index === cursor || (isLast && lastActive)
 
-    const ref = useRef<HTMLInputElement>(null);
+    const ref = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
-        isActive && ref.current?.focus();
-    }, [cursor]);
+        isActive && ref.current?.focus()
+    }, [cursor])
 
     const charInput = (c: string) => {
-        /^[a-z0-9]$/.test(c) && next(c);
-    };
+        /^[a-z0-9]$/.test(c) && next(c)
+    }
 
     return (
         <input
@@ -39,5 +39,5 @@ export default function InputBox({ index, count, cursor, input, next, prev, notF
             onFocus={e => !isActive && e.target.blur()}
             onBlur={() => isActive && ref.current?.focus()}
         />
-    );
+    )
 }

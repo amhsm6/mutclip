@@ -1,36 +1,36 @@
-"use client";
+"use client"
 
-import ControlButton from "@/components/ControlButton";
-import BodyRefContext from "@/contexts/BodyRefContext";
-import { useContext, useEffect, useTransition } from "react";
-import { ClipLoader } from "react-spinners";
-import { clipRedirect } from "./actions";
-import IdentifierInput from "./components/IdentifierInput";
-import styles from "./page.module.css";
+import { useContext, useEffect, useTransition } from "react"
+import ControlButton from "@/components/ControlButton"
+import BodyRefContext from "@/contexts/BodyRefContext"
+import { ClipLoader } from "react-spinners"
+import { clipRedirect } from "./actions"
+import IdentifierInput from "./components/IdentifierInput"
+import styles from "./page.module.css"
 
 export default function Page() {
-    const bodyRef = useContext(BodyRefContext);
+    const bodyRef = useContext(BodyRefContext)
 
-    const [isPending, startTransition] = useTransition();
+    const [isPending, startTransition] = useTransition()
 
     const generateNew = () => {
         startTransition(async () => {
-            await clipRedirect(undefined);
-        });
-    };
+            await clipRedirect(null)
+        })
+    }
 
     useEffect(() => {
-        const body = bodyRef.current;
-        if (!body) { return; }
+        const body = bodyRef.current
+        if (!body) { return }
 
         body.onkeydown = e => {
-            if (e.key === "Enter") { generateNew(); }
-        };
+            if (e.key === "Enter") { generateNew() }
+        }
 
         return () => {
-            body.onkeydown = null;
-        };
-    }, []);
+            body.onkeydown = null
+        }
+    }, [])
 
     return (
         <div className={styles.container}>
@@ -45,5 +45,5 @@ export default function Page() {
                 </div>
             }
         </div>
-    );
+    )
 }

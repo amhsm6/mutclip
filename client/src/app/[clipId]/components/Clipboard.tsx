@@ -1,93 +1,93 @@
-"use client";
+"use client"
 
-import React, { useContext, useEffect, useRef, useState } from "react";
-import ControlButton from "@/components/ControlButton";
-import BodyRefContext from "@/contexts/BodyRefContext";
-import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext";
-import ClipboardJS from "clipboard";
-import { FaRegTrashCan, FaRegCopy } from "react-icons/fa6";
-import { ClipLoader } from "react-spinners";
-import { useSocketContents } from "../hooks";
-import Downloader from "./Downloader";
-import MessageBox from "./MessageBox";
-import Preview from "./Preview";
-import Uploader from "./Uploader";
-import styles from "./Clipboard.module.css";
+import { useContext, useEffect, useRef, useState } from "react"
+import ControlButton from "@/components/ControlButton"
+import BodyRefContext from "@/contexts/BodyRefContext"
+import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext"
+import ClipboardJS from "clipboard"
+import { FaRegTrashCan, FaRegCopy } from "react-icons/fa6"
+import { ClipLoader } from "react-spinners"
+import { useSocketContents } from "../hooks"
+import Downloader from "./Downloader"
+import MessageBox from "./MessageBox"
+import Preview from "./Preview"
+import Uploader from "./Uploader"
+import styles from "./Clipboard.module.css"
 
-type Props = {
+interface Props {
     clipId: string
-};
+}
 
 export default function Clipboard({ clipId }: Props) {
-    const { contents, reset, setText, setFile, socketState } = useSocketContents();
-    const [renderedContents, setRenderedContents] = useState("");
+    const { contents, reset, setText, setFile, socketState } = useSocketContents()
+    const [renderedContents, setRenderedContents] = useState("")
 
-    const { pushMessage } = useContext(MessageQueueContext);
+    const { pushMessage } = useContext(MessageQueueContext)
 
-    const bodyRef = useContext(BodyRefContext);
-    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const bodyRef = useContext(BodyRefContext)
+    const inputRef = useRef<HTMLTextAreaElement>(null)
 
     if (socketState.error) { throw socketState.error };
 
     useEffect(() => {
         if (contents.type === "text") {
-            setRenderedContents(contents.data);
+            setRenderedContents(contents.data)
         } else {
-            setRenderedContents(`${contents.filename}: ${contents.contentType}`);
+            setRenderedContents(`${contents.filename}: ${contents.contentType}`)
         }
-    }, [contents.data, contents.incoming]);
+    }, [contents.data, contents.incoming])
 
     const copy = () => {
-        if (!inputRef.current) { return; }
-        ClipboardJS.copy(inputRef.current);
+        if (!inputRef.current) { return }
+        ClipboardJS.copy(inputRef.current)
 
-        pushMessage({ type: MessageType.INFO, text: "Copied" });
-    };
+        pushMessage({ type: MessageType.INFO, text: "Copied" })
+    }
 
     const paste = (e: ClipboardEvent) => {
-        const items = e.clipboardData?.items;
-        if (!items || items.length !== 1) { return; }
-        const item = items[0];
+        const items = e.clipboardData?.items
+        if (!items || items.length !== 1) { return }
+        const item = items[0]
 
         switch (item.kind) {
             case "string":
-                item.getAsString(setText);
+                item.getAsString(setText)
 
-                break;
+                break
 
             case "file":
-                const file = item.getAsFile();
-                if (!file) { break; }
+                const file = item.getAsFile()
+                if (!file) { break }
 
-                setFile(file);
+                setFile(file)
 
-                break;
+                break
 
             default:
         }
-    };
+    }
 
     useEffect(() => {
-        const body = bodyRef.current;
-        const input = inputRef.current;
+        const body = bodyRef.current
+        const input = inputRef.current
 
-        if (!body || !input) { return; }
+        if (!body || !input) { return }
 
-        body.onpaste = paste;
+        body.onpaste = paste
         body.onkeydown = e => {
-            if (e.key === "Escape") { reset(); }
+            if (e.key === "Escape") { reset() }
 
             if (e.key === "Enter") {
-                input.focus();
-                e.preventDefault();
+                input.focus()
+                e.preventDefault()
             }
-        };
+        }
 
         return () => {
-            body.onpaste = null;
-            body.onkeydown = null;
-        };
-    }, [reset]);
+            body.onpaste = null
+            body.onkeydown = null
+        }
+    }, [reset])
 
     return (
         <div className={styles.content}>
@@ -128,5 +128,5 @@ export default function Clipboard({ clipId }: Props) {
                 <Preview contents={contents} />
             </div>
         </div>
-    );
+    )
 }

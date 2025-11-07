@@ -1,12 +1,12 @@
-import React from "react";
-import { BodyRefProvider } from "@/contexts/BodyRefContext";
-import type { Metadata } from "next";
-import "./globals.css";
+import React from "react"
+import { BodyRefProvider } from "@/contexts/BodyRefContext"
+import type { Metadata } from "next"
+import "./globals.css"
 
 export const metadata: Metadata = {
     title: "mutclip",
     description: "Mutual Clipboard"
-};
+}
 
 export default function RootLayout({ children }: React.PropsWithChildren) {
     return (
@@ -15,5 +15,5 @@ export default function RootLayout({ children }: React.PropsWithChildren) {
                 {children}
             </BodyRefProvider>
         </html>
-    );
+    )
 }

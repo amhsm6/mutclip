@@ -1,39 +1,39 @@
-"use server";
+"use server"
 
-import { redirect } from "next/navigation";
+import { redirect } from "next/navigation"
 
 export async function newclip() {
-    const resp = await fetch(`http://${process.env.SERVER}:5000/newclip`, { cache: "no-store" });
+    const resp = await fetch(`http://${process.env.SERVER}:5000/newclip`, { cache: "no-store" })
     if (!resp.ok) {
-        throw new Error(await resp.text());
+        throw new Error(await resp.text())
     }
 
-    return await resp.text();
+    return await resp.text()
 }
 
 export async function checkClip(id: string) {
-    const resp = await fetch(`http://${process.env.SERVER}:5000/check/${id}`, { cache: "no-store" });
+    const resp = await fetch(`http://${process.env.SERVER}:5000/check/${id}`, { cache: "no-store" })
 
     if (resp.ok) {
-        return true;
+        return true
     }
 
     if (resp.status === 404) {
-        return false;
+        return false
     }
 
-    throw new Error(await resp.text());
+    throw new Error(await resp.text())
 }
 
-export async function clipRedirect(id: string | undefined) {
+export async function clipRedirect(id: string | null) {
     if (id) {
         if (!await checkClip(id)) {
-            return true;
+            return true
         }
 
-        redirect(`/${id}`);
+        redirect(`/${id}`)
     } else {
-        const id = await newclip();
-        redirect(`/${id}`);
+        const id = await newclip()
+        redirect(`/${id}`)
     }
 }
