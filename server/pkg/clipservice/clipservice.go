@@ -480,7 +480,7 @@ func (s *ClipboardService) Start(id ClipboardId) {
 			timer.Reset(ClipDeadline)
 
 			if text := m.GetText(); text != nil {
-				go s.processText(id, m.Cid, text)
+				s.processText(id, m.Cid, text)
 				continue
 			}
 

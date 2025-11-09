@@ -19,12 +19,12 @@ interface Props {
 }
 
 export default function Clipboard({ clipId }: Props) {
+    const { pushMessage } = useContext(MessageQueueContext)
+    const bodyRef = useContext(BodyRefContext)
+
     const { contents, reset, setText, setFile, socketState } = useSocketContents()
     const [renderedContents, setRenderedContents] = useState("")
 
-    const { pushMessage } = useContext(MessageQueueContext)
-
-    const bodyRef = useContext(BodyRefContext)
     const inputRef = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
@@ -33,7 +33,7 @@ export default function Clipboard({ clipId }: Props) {
         } else {
             setRenderedContents(`${contents.filename}: ${contents.contentType}`)
         }
-    }, [contents.data]) // TODO: why do we need incoming?
+    }, [contents])
 
     const copy = () => {
         if (!inputRef.current) { return }
@@ -84,7 +84,7 @@ export default function Clipboard({ clipId }: Props) {
         }
     }, [reset])
 
-    if (socketState.error) { throw socketState.error }
+    if (socketState.type === "Errored") { throw socketState.error }
 
     return (
         <div className={styles.content}>
@@ -98,7 +98,7 @@ export default function Clipboard({ clipId }: Props) {
                         ref={inputRef}
                         value={renderedContents}
                         onChange={e => setText(e.target.value)}
-                        disabled={contents.type === "file" || !socketState.connected || socketState.sending || socketState.receiving}
+                        disabled={contents.type === "file" || socketState.type !== "Idle"}
                         autoFocus
                         rows={10}
                     />
@@ -110,10 +110,10 @@ export default function Clipboard({ clipId }: Props) {
                             <ControlButton className={styles.copy} onClick={copy}>
                                 <FaRegCopy />
                             </ControlButton>
-                            <Uploader setFile={setFile} disabled={!socketState.connected || socketState.receiving || socketState.sending} />
+                            <Uploader setFile={setFile} disabled={socketState.type !== "Idle"} />
                             <Downloader contents={contents} />
                         </div>
-                        {(!socketState.connected || socketState.sending || socketState.receiving) && <ClipLoader />}
+                        {socketState.type !== "Idle" && <ClipLoader />}
                     </div>
                 </div>
                 <div className={styles["message-box"]}>

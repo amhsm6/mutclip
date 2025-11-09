@@ -24,6 +24,8 @@ interface Props {
 }
 
 export function SocketProvider({ clipId, children }: React.PropsWithChildren<Props>) {
+    const { pushMessage } = useContext(MessageQueueContext)
+
     const socketRef = useRef<WS>({ ws: null, ok: false })
     const [reconnect, setReconnect] = useState(false)
 
@@ -33,8 +35,6 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
     const sendMessage = (m: Message) => setOutQueue([...outQueue, m])
 
     const [socketOk, setSocketOk] = useState(false)
-
-    const { pushMessage } = useContext(MessageQueueContext)
 
     useEffect(() => {
         if (!reconnect) { return }
@@ -110,7 +110,6 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
         pushMessage({ type: MessageType.INFO, text: "Connecting to Server..." })
         setReconnect(true)
 
-        // TODO: dedup
         window.onbeforeunload = () => {
             setSocketOk(false)
             socketRef.current.ok = false
@@ -119,22 +118,18 @@ export function SocketProvider({ clipId, children }: React.PropsWithChildren<Pro
 
         return () => {
             window.onbeforeunload = null
-
-            setSocketOk(false)
-            socketRef.current.ok = false
-            socketRef.current.ws?.close()
         }
     }, [])
 
     useEffect(() => {
         const socket = socketRef.current
-        if (!socket.ok || !socket.ws) { return }
+        if (!socket.ok) { return }
 
         const m = outQueue.shift()
         if (!m) { return }
 
-        socket.ws.send(Message.encode(m).finish())
-    }, [outQueue.length])
+        socket.ws!.send(Message.encode(m).finish())
+    }, [outQueue])
 
     return (
         <SocketContext.Provider value={{ queue: inQueue, sendMessage, socketOk }}>
