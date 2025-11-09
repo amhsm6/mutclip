@@ -18,6 +18,8 @@ interface Props {
     clipId: string
 }
 
+// FIXME: user cursor jumping to the end
+
 export default function Clipboard({ clipId }: Props) {
     const { pushMessage } = useContext(MessageQueueContext)
     const bodyRef = useContext(BodyRefContext)
@@ -98,7 +100,8 @@ export default function Clipboard({ clipId }: Props) {
                         ref={inputRef}
                         value={renderedContents}
                         onChange={e => setText(e.target.value)}
-                        disabled={contents.type === "file" || socketState.type !== "Idle"}
+                        readOnly={contents.type === "file" || socketState.type !== "Idle"}
+                        className={(contents.type === "file" || socketState.type !== "Idle") ? styles["disabled"] : ""}
                         autoFocus
                         rows={10}
                     />

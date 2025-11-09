@@ -57,6 +57,8 @@ const cut = async (data: Blob) => {
     return chunks
 }
 
+// TODO: need a message of denied while receiving file
+
 export function useSocketContents() {
     const { sendMessage, queue, socketOk } = useContext(SocketContext)
     const { pushMessage } = useContext(MessageQueueContext)
@@ -89,7 +91,7 @@ export function useSocketContents() {
         if (!m) { return }
 
         if (m.text) {
-            if (socketState.type !== "Idle" && socketState.type !== "AwaitingInitialReceive" && socketState.type !== "Disconnected") { return } // TODO: maybe log error
+            if (socketState.type !== "Idle" && socketState.type !== "AwaitingInitialReceive" && socketState.type !== "Disconnected") { return } // TODO: maybe log error + avoid Disconnected
 
             setContents({ type: "text", data: m.text.data, incoming: true })
 
@@ -129,10 +131,10 @@ export function useSocketContents() {
             }
 
             fileRecvRef.current!.push(m.chunk)
-            socketState.nextChunk++
+            const nextChunk = socketState.nextChunk + 1
 
-            if (socketState.nextChunk < socketState.header.numChunks) {
-                setSocketState({ ...socketState })
+            if (nextChunk < socketState.header.numChunks) {
+                setSocketState({ ...socketState, nextChunk })
                 sendMessage(Message.create({ nextChunk: {} }))
                 return
             }

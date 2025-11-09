@@ -38,6 +38,10 @@
     border: 2px solid black;
 }
 
+.disabled {
+    color: gray;
+}
+
 .bottom-row {
     display: flex;
     justify-content: space-between;
