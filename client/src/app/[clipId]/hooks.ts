@@ -195,7 +195,7 @@ export function useSocketContents() {
         if (socketState.type !== "Idle" || contents.incoming) { return }
 
         const timeout = setTimeout(() => {
-            if (socketState.type !== "Idle") { return }
+            if (socketState.type !== "Idle") { return } // FIXME: this captures old state
 
             if (contents.type === "text") {
                 setSocketState({ type: "SendingText" })

@@ -144,25 +144,20 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 	r.tunnels.Store(cid, tun)
 
 	go func() {
-		defer cancel()
+		select {
 
-		for {
-			select {
+		case <-ctx.Done():
 
-			case m, ok := <-out:
-				if !ok {
-					return
-				}
+		case <-r.ctx.Done():
 
-				conn.out <- m
+		}
 
-			case <-ctx.Done():
-				return
+		cancel()
+	}()
 
-			case <-r.ctx.Done():
-				return
-
-			}
+	go func() {
+		for m := range out {
+			conn.out <- m
 		}
 	}()
 
@@ -179,43 +174,31 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 }
 
 func (r *Router) Start() {
-	for {
-		select {
-
-		case m, ok := <-r.Source:
+	for m := range r.Source {
+		sent := false
+		r.tunnels.Range(func(key, val any) bool {
+			cid, ok := key.(CID)
 			if !ok {
-				return
+				panic("impossible")
 			}
 
-			sent := false
-			r.tunnels.Range(func(key, val any) bool {
-				cid, ok := key.(CID)
-				if !ok {
-					panic("impossible")
-				}
-
-				tun, ok := val.(*Tunnel)
-				if !ok {
-					panic("impossible")
-				}
-
-				if m.Cid == cid {
-					tun.In <- m
-
-					sent = true
-					return false
-				}
-
-				return true
-			})
-
-			if !sent {
-				r.Drain <- m
+			tun, ok := val.(*Tunnel)
+			if !ok {
+				panic("impossible")
 			}
 
-		case <-r.ctx.Done():
-			return
+			if m.Cid == cid {
+				tun.In <- m
 
+				sent = true
+				return false
+			}
+
+			return true
+		})
+
+		if !sent {
+			r.Drain <- m
 		}
 	}
 }

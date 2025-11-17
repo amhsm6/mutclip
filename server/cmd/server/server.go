@@ -147,32 +147,20 @@ func main() {
 		go func() {
 			defer client.Cancel()
 
-			for {
-				select {
+			for m := range client.Out {
+				err := conn.WriteMessage(websocket.BinaryMessage, net.Out(m))
+				if err != nil {
+					select {
 
-				case m, ok := <-client.Out:
-					if !ok {
+					case <-client.Done():
 						return
+
+					default:
+
 					}
 
-					err := conn.WriteMessage(websocket.BinaryMessage, net.Out(m))
-					if err != nil {
-						select {
-
-						case <-client.Done():
-							return
-
-						default:
-
-						}
-
-						log.Error(err)
-						return
-					}
-
-				case <-client.Done():
+					log.Error(err)
 					return
-
 				}
 			}
 		}()

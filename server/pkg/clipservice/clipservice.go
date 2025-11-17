@@ -29,7 +29,7 @@ type ClipboardId = string
 type Clipboard struct {
 	router  *net.Router
 	content Content
-	clients map[net.CID]struct{}
+	clients map[net.CID]struct{} // FIXME
 	ctx     context.Context
 	cancel  context.CancelFunc
 }
@@ -225,37 +225,27 @@ func (s *ClipboardService) syncClient(id ClipboardId, cid net.CID) error {
 		}}}
 
 		idx := 0
-		for {
-			select {
-
-			case m, ok := <-tun.In:
-				if !ok {
-					return ErrClientDisconnected
-				}
-
-				if m.GetNextChunk() == nil {
-					log.Errorf("unexpected message while sending file: %v", m)
-					tun.Out <- net.Err(fmt.Errorf("unexpected message"))
-					continue
-				}
-
-				log.Infof("[%v] SYNC -> %v : %v/%v", id, cid, idx+1, content.numChunks)
-
-				tun.Out <- &pb.Message{Msg: &pb.Message_Chunk{Chunk: &pb.Chunk{Index: int32(idx), Data: content.chunks[idx]}}}
-				idx++
-
-				if idx < content.numChunks {
-					continue
-				}
-
-				log.Infof("[%v] SYNC -> %v : OK", id, cid)
-				return nil
-
-			case <-tun.Done():
-				return ErrClientDisconnected
-
+		for m := range tun.In {
+			if m.GetNextChunk() == nil {
+				log.Errorf("unexpected message while sending file: %v", m)
+				tun.Out <- net.Err(fmt.Errorf("unexpected message"))
+				continue
 			}
+
+			log.Infof("[%v] SYNC -> %v : %v/%v", id, cid, idx+1, content.numChunks)
+
+			tun.Out <- &pb.Message{Msg: &pb.Message_Chunk{Chunk: &pb.Chunk{Index: int32(idx), Data: content.chunks[idx]}}}
+			idx++
+
+			if idx < content.numChunks {
+				continue
+			}
+
+			log.Infof("[%v] SYNC -> %v : OK", id, cid)
+			return nil
 		}
+
+		return ErrClientDisconnected
 
 	default:
 		panic("impossible")
@@ -385,66 +375,53 @@ func (s *ClipboardService) processFile(id ClipboardId, timer *time.Timer, cid ne
 
 	tun.Out <- &pb.Message{Msg: &pb.Message_NextChunk{NextChunk: &pb.NextChunk{}}}
 
-	for {
-		select {
+	for m := range tun.In {
+		timer.Reset(ClipDeadline) // FIXME
 
-		case m, ok := <-tun.In:
-			if !ok {
-				clip.content = originalContent
-				log.Error("client disconnected while receiving file")
-				return
-			}
+		chunk := m.GetChunk()
+		if chunk == nil {
+			log.Errorf("unexpected message while receiving file")
+			tun.Out <- net.Err(fmt.Errorf("unexpected message"))
+			return
+		}
 
-			timer.Reset(ClipDeadline)
+		file, ok := clip.content.(ContentFile)
+		if !ok {
+			log.Errorf("unexpected state of contents: %v", clip.content)
+			tun.Out <- net.Err(fmt.Errorf("internal server error"))
+			return
+		}
 
-			chunk := m.GetChunk()
-			if chunk == nil {
-				log.Errorf("unexpected message while receiving file")
-				tun.Out <- net.Err(fmt.Errorf("unexpected message"))
-				return
-			}
+		if int(chunk.GetIndex()) != file.nextChunkIndex {
+			log.Errorf("received chunk with index %v, but expected %v", chunk.GetIndex(), file.nextChunkIndex)
+			tun.Out <- net.Err(fmt.Errorf("transmission disordered"))
+			return
+		}
 
-			file, ok := clip.content.(ContentFile)
-			if !ok {
-				log.Errorf("unexpected state of contents: %v", clip.content)
-				tun.Out <- net.Err(fmt.Errorf("internal server error"))
-				return
-			}
+		log.Infof("[%v] <- %v : %v/%v", id, cid, chunk.GetIndex()+1, file.numChunks)
 
-			if int(chunk.GetIndex()) != file.nextChunkIndex {
-				log.Errorf("received chunk with index %v, but expected %v", chunk.GetIndex(), file.nextChunkIndex)
-				tun.Out <- net.Err(fmt.Errorf("transmission disordered"))
-				return
-			}
+		file.nextChunkIndex++
+		file.chunks = append(file.chunks, chunk.GetData())
 
-			log.Infof("[%v] <- %v : %v/%v", id, cid, chunk.GetIndex()+1, file.numChunks)
-
-			file.nextChunkIndex++
-			file.chunks = append(file.chunks, chunk.GetData())
-
-			if file.nextChunkIndex < file.numChunks {
-				clip.content = file
-
-				tun.Out <- &pb.Message{Msg: &pb.Message_NextChunk{NextChunk: &pb.NextChunk{}}}
-
-				continue
-			}
-
-			file.ready = true
+		if file.nextChunkIndex < file.numChunks {
 			clip.content = file
 
-			log.Infof("[%v] <- %v : OK", id, cid)
-			s.syncClip(id, cid)
+			tun.Out <- &pb.Message{Msg: &pb.Message_NextChunk{NextChunk: &pb.NextChunk{}}}
 
-			return
-
-		case <-tun.Done():
-			clip.content = originalContent
-			log.Error("client disconnected while receiving file")
-			return
-
+			continue
 		}
+
+		file.ready = true
+		clip.content = file
+
+		log.Infof("[%v] <- %v : OK", id, cid)
+		s.syncClip(id, cid)
+
+		return
 	}
+
+	clip.content = originalContent
+	log.Error("client disconnected while receiving file")
 }
 
 func (s *ClipboardService) Start(id ClipboardId) {
@@ -469,32 +446,20 @@ func (s *ClipboardService) Start(id ClipboardId) {
 		clip.cancel()
 	}()
 
-	for {
-		select {
+	for m := range r.Drain {
+		timer.Reset(ClipDeadline)
 
-		case m, ok := <-r.Drain:
-			if !ok {
-				return
-			}
-
-			timer.Reset(ClipDeadline)
-
-			if text := m.GetText(); text != nil {
-				s.processText(id, m.Cid, text)
-				continue
-			}
-
-			if hdr := m.GetHdr(); hdr != nil {
-				go s.processFile(id, timer, m.Cid, hdr)
-				continue
-			}
-
-			log.Errorf("unexpected message")
-			r.Send(m.Cid, net.Err(fmt.Errorf("unpexpected message")))
-
-		case <-clip.ctx.Done():
-			return
-
+		if text := m.GetText(); text != nil {
+			s.processText(id, m.Cid, text)
+			continue
 		}
+
+		if hdr := m.GetHdr(); hdr != nil {
+			go s.processFile(id, timer, m.Cid, hdr)
+			continue
+		}
+
+		log.Errorf("unexpected message")
+		r.Send(m.Cid, net.Err(fmt.Errorf("unpexpected message")))
 	}
 }
