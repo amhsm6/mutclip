@@ -1,5 +1,3 @@
-import type { Chunk } from "@/pb/clip"
-
 interface TextContents {
     type: "text"
     data: string

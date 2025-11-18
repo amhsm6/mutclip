@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+
 import styles from "./InputBox.module.css"
 
 interface Props {

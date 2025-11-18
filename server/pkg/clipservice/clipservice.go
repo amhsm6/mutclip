@@ -158,11 +158,8 @@ func (s *ClipboardService) Connect(id ClipboardId, ctx context.Context) (*Client
 
 	go func() {
 		select {
-
 		case <-clientCtx.Done():
-
 		case <-clip.ctx.Done():
-
 		}
 
 		clientCancel()
@@ -405,9 +402,7 @@ func (s *ClipboardService) processFile(id ClipboardId, timer *time.Timer, cid ne
 
 		if file.nextChunkIndex < file.numChunks {
 			clip.content = file
-
 			tun.Out <- &pb.Message{Msg: &pb.Message_NextChunk{NextChunk: &pb.NextChunk{}}}
-
 			continue
 		}
 

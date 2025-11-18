@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+
 import { type Message, MessageType } from "../contexts/MessageQueueContext"
 import styles from "./MessageEntry.module.css"
 
@@ -15,7 +16,6 @@ export default function MessageEntry({ message, animation }: EntryProps) {
     const DIRECTION = document.body.clientWidth > remToPx(45) && document.body.clientWidth <= remToPx(60) ? 1 : -1
 
     let typeclass = ""
-
     switch (message.type) {
         case MessageType.SUCCESS:
             typeclass = styles.success

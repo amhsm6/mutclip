@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useRef } from "react"
-import ControlButton from "@/components/ControlButton"
 import { FaUpload } from "react-icons/fa6"
+
+import ControlButton from "@/components/ControlButton"
 import styles from "./Uploader.module.css"
 
 interface Props {

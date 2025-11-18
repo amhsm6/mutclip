@@ -1,10 +1,11 @@
 import React from "react"
-import { BodyRefProvider } from "@/contexts/BodyRefContext"
 import type { Metadata } from "next"
+
+import { BodyRefProvider } from "@/contexts/BodyRefContext"
 import "./globals.css"
 
 export const metadata: Metadata = {
-    title: "mutclip",
+    title: "Mutual Clipboard",
     description: "Mutual Clipboard"
 }
 

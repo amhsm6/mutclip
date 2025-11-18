@@ -1,10 +1,11 @@
 "use client"
 
 import { useContext, useEffect, useTransition } from "react"
+import { ClipLoader } from "react-spinners"
+
+import { clipRedirect } from "./actions"
 import ControlButton from "@/components/ControlButton"
 import BodyRefContext from "@/contexts/BodyRefContext"
-import { ClipLoader } from "react-spinners"
-import { clipRedirect } from "./actions"
 import IdentifierInput from "./components/IdentifierInput"
 import styles from "./page.module.css"
 

@@ -1,10 +1,11 @@
 "use client"
 
 import { useContext, useRef } from "react"
+import { FaDownload } from "react-icons/fa6"
+
 import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext"
 import type { Contents } from "../types/clipboard"
 import ControlButton from "@/components/ControlButton"
-import { FaDownload } from "react-icons/fa6"
 import styles from "./Downloader.module.css"
 
 interface Props {
@@ -18,17 +19,17 @@ export default function Downloader({ contents }: Props) {
 
     const download = () => {
         const downloader = downloaderRef.current
-        if (!downloader || contents.type === "text") {
+        if (!downloader) { return }
+
+        if (contents.type === "text") {
             pushMessage({ type: MessageType.ERROR, text: "No file to download" })
             return
         }
 
-        const name = contents.filename
-
-        pushMessage({ type: MessageType.INFO, text: `Downloading ${name}` })
+        pushMessage({ type: MessageType.INFO, text: `Downloading ${contents.filename}` })
 
         downloader.href = URL.createObjectURL(contents.data)
-        downloader.download = name
+        downloader.download = contents.filename
         downloader.click()
     }
 

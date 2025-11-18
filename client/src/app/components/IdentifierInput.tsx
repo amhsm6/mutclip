@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+
 import { clipRedirect } from "../actions"
 import InputBox from "./InputBox"
 import styles from "./IdentifierInput.module.css"

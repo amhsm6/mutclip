@@ -1,6 +1,7 @@
 "use client"
 
 import { useContext } from "react"
+
 import MessageQueueContext from "../contexts/MessageQueueContext"
 import MessageEntry from "./MessageEntry"
 import styles from "./MessageBox.module.css"

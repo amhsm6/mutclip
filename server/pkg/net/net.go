@@ -55,18 +55,13 @@ func NewRouter(ctx context.Context) *Router {
 
 func (r *Router) Connect(out chan<- OutMessage, ctx context.Context) CID {
 	cid := newCID()
-
 	conn := &Conn{out, ctx}
-
 	r.conns.Store(cid, conn)
 
 	go func() {
 		select {
-
 		case <-ctx.Done():
-
 		case <-r.ctx.Done():
-
 		}
 
 		r.conns.Delete(cid)
@@ -145,11 +140,8 @@ func (r *Router) Tunnel(cid CID) (*Tunnel, error) {
 
 	go func() {
 		select {
-
 		case <-ctx.Done():
-
 		case <-r.ctx.Done():
-
 		}
 
 		cancel()

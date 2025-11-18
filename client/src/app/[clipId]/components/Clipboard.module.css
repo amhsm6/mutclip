@@ -74,6 +74,17 @@
     }
 }
 
+.loader {
+    width: 28%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chunk-counter {
+    width: 70%;
+}
+
 .message-box {
     margin-top: 20px;
     margin-left: 20px;

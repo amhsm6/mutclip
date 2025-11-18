@@ -1,10 +1,11 @@
 import { Suspense } from "react"
+import { notFound } from "next/navigation"
+
 import { checkClip } from "../actions"
 import { SocketProvider } from "./contexts/SocketContext"
 import { MessageQueueProvider } from "./contexts/MessageQueueContext"
 import Clipboard from "./components/Clipboard"
 import Loading from "./components/Loading"
-import { notFound } from "next/navigation"
 
 interface Props {
     params: Promise<{ clipId: string }>

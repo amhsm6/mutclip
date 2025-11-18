@@ -1,8 +1,9 @@
 "use client"
 
 import React, { createContext, useState, useEffect, useRef, useContext } from "react"
-import { Message } from "@/pb/clip"
+
 import MessageQueueContext, { MessageType } from "./MessageQueueContext"
+import { Message } from "@/pb/clip"
 
 interface Socket {
     sendMessage: (m: Message) => void

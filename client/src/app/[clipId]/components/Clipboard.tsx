@@ -1,13 +1,14 @@
 "use client"
 
 import { useContext, useEffect, useRef, useState } from "react"
-import ControlButton from "@/components/ControlButton"
-import BodyRefContext from "@/contexts/BodyRefContext"
-import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext"
-import ClipboardJS from "clipboard"
 import { FaRegTrashCan, FaRegCopy } from "react-icons/fa6"
 import { ClipLoader } from "react-spinners"
+import ClipboardJS from "clipboard"
+
+import BodyRefContext from "@/contexts/BodyRefContext"
+import MessageQueueContext, { MessageType } from "../contexts/MessageQueueContext"
 import { useSocketContents } from "../hooks"
+import ControlButton from "@/components/ControlButton"
 import Downloader from "./Downloader"
 import MessageBox from "./MessageBox"
 import Preview from "./Preview"
@@ -103,6 +104,7 @@ export default function Clipboard({ clipId }: Props) {
                         autoFocus
                         rows={10}
                     />
+
                     <div className={styles["bottom-row"]}>
                         <div className={styles.controls}>
                             <ControlButton className={styles.reset} onClick={reset}>
@@ -114,9 +116,22 @@ export default function Clipboard({ clipId }: Props) {
                             <Uploader setFile={setFile} disabled={socketStatus.type !== "Idle"} />
                             <Downloader contents={contents} />
                         </div>
-                        {socketStatus.type !== "Idle" && <ClipLoader />}
+
+                        <div className={styles.loader}>
+                            <div className={styles["chunk-counter"]}>
+                                {
+                                    (
+                                        socketStatus.type === "SendingFile" && socketStatus.nextChunk !== null
+                                        || socketStatus.type === "ReceivingFile" && socketStatus.nextChunk !== 0
+                                    ) &&
+                                    `${socketStatus.type === "SendingFile" ? socketStatus.nextChunk! + 1 : socketStatus.nextChunk}/${socketStatus.header.numChunks}`
+                                }
+                            </div>
+                            {socketStatus.type !== "Idle" && <div><ClipLoader /></div>}
+                        </div>
                     </div>
                 </div>
+
                 <div className={styles["message-box"]}>
                     <MessageBox />
                 </div>

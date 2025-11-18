@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useContext, useRef } from "react"
+
 import SocketContext from "./contexts/SocketContext"
 import MessageQueueContext, { MessageType } from "./contexts/MessageQueueContext"
 import type { Contents } from "./types/clipboard"

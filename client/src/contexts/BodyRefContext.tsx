@@ -2,9 +2,7 @@
 
 import React, { createContext, createRef, useRef } from "react"
 
-type BodyRef = React.RefObject<HTMLBodyElement | null>
-
-const BodyRefContext = createContext<BodyRef>(createRef())
+const BodyRefContext = createContext(createRef<HTMLBodyElement>())
 
 export default BodyRefContext
 
