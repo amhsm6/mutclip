@@ -36,9 +36,44 @@ interface ReceivingFile {
     type: "ReceivingFile"
     header: FileHeader
     nextChunk: number
+    chunks: Chunk[]
 }
 
 type SocketState = Disconnected | Errored | AwaitingInitialReceive | Idle | SendingText | SendingFile | ReceivingFile
+
+interface StatusDisconnected {
+    type: "Disconnected"
+}
+
+interface StatusErrored {
+    type: "Errored"
+    error: Error
+}
+
+interface StatusAwaitingInitialReceive {
+    type: "AwaitingInitialReceive"
+}
+
+interface StatusIdle {
+    type: "Idle"
+}
+
+interface StatusSendingText {
+    type: "SendingText"
+}
+
+interface StatusSendingFile {
+    type: "SendingFile"
+    nextChunk: number | null
+}
+
+interface StatusReceivingFile {
+    type: "ReceivingFile"
+    header: FileHeader
+    nextChunk: number
+}
+
+type SocketStatus = StatusDisconnected | StatusErrored | StatusAwaitingInitialReceive | StatusIdle | StatusSendingText | StatusSendingFile | StatusReceivingFile
 
 const cut = async (data: Blob) => {
     const bytes = new Uint8Array(await data.arrayBuffer())
@@ -65,8 +100,47 @@ export function useSocketContents() {
 
     const [contents, setContents] = useState<Contents & { incoming: boolean }>({ type: "text", data: "", incoming: true })
 
-    const [socketState, setSocketState] = useState<SocketState>({ type: "Disconnected" })
-    const fileRecvRef = useRef<Chunk[] | null>(null)
+    const socketStateRef = useRef<SocketState>({ type: "Disconnected" })
+    const [socketStatus, setSocketStatus] = useState<SocketStatus>({ type: "Disconnected" })
+
+    const getSocketState = () => socketStateRef.current
+
+    const setSocketState = (state: SocketState) => {
+        socketStateRef.current = state
+
+        switch (state.type) {
+            case "Disconnected":
+                setSocketStatus({ type: "Disconnected" })
+                break
+
+            case "Errored":
+                setSocketStatus({ type: "Errored", error: state.error })
+                break
+
+            case "AwaitingInitialReceive":
+                setSocketStatus({ type: "AwaitingInitialReceive" })
+                break
+
+            case "Idle":
+                setSocketStatus({ type: "Idle" })
+                break
+
+            case "SendingText":
+                setSocketStatus({ type: "SendingText" })
+                break
+
+            case "SendingFile":
+                setSocketStatus({ type: "SendingFile", nextChunk: state.nextChunk })
+                break
+
+            case "ReceivingFile":
+                setSocketStatus({ type: "ReceivingFile", header: state.header, nextChunk: state.nextChunk })
+                break
+
+            default:
+                state satisfies never
+        }
+    }
 
     const firstConnection = useRef(true)
     useEffect(() => {
@@ -75,14 +149,11 @@ export function useSocketContents() {
                 firstConnection.current = false
 
                 setSocketState({ type: "AwaitingInitialReceive" })
-                fileRecvRef.current = null
             } else {
                 setSocketState({ type: "Idle" })
-                fileRecvRef.current = null
             }
         } else {
             setSocketState({ type: "Disconnected" })
-            fileRecvRef.current = null
         }
     }, [socketOk])
 
@@ -90,32 +161,31 @@ export function useSocketContents() {
         const m = queue.shift()
         if (!m) { return }
 
+        const socketState = getSocketState()
+
         if (m.text) {
-            if (socketState.type !== "Idle" && socketState.type !== "AwaitingInitialReceive" && socketState.type !== "Disconnected") { return } // TODO: maybe log error + avoid Disconnected
+            if (socketState.type !== "Idle" && socketState.type !== "AwaitingInitialReceive") { return }
 
             setContents({ type: "text", data: m.text.data, incoming: true })
 
             setSocketState({ type: "Idle" })
-            fileRecvRef.current = null
         } else if (m.nextChunk) {
             if (socketState.type !== "SendingFile") { return }
 
             if (socketState.nextChunk === null) {
-                setSocketState({ type: "SendingFile", nextChunk: 0 })
+                setSocketState({ ...socketState, nextChunk: 0 })
             } else {
-                const nextChunk = socketState.nextChunk + 1
-                setSocketState({ type: "SendingFile", nextChunk })
+                setSocketState({ ...socketState, nextChunk: socketState.nextChunk + 1 })
             }
-            fileRecvRef.current = null
         } else if (m.hdr) {
-            if (socketState.type !== "Idle" && socketState.type !== "AwaitingInitialReceive" && socketState.type !== "Disconnected") { return }
+            if (socketState.type !== "Idle" && socketState.type !== "AwaitingInitialReceive") { return }
 
             setSocketState({
                 type: "ReceivingFile",
                 header: m.hdr,
-                nextChunk: 0
+                nextChunk: 0,
+                chunks: []
             })
-            fileRecvRef.current = []
 
             pushMessage({ type: MessageType.INFO, text: `Receiving ${m.hdr.filename}` })
 
@@ -125,63 +195,55 @@ export function useSocketContents() {
 
             if (socketState.nextChunk != m.chunk.index) {
                 setSocketState({ type: "Idle" })
-                fileRecvRef.current = null
                 pushMessage({ type: MessageType.ERROR, text: "Transmission disordered" })
                 return
             }
 
-            fileRecvRef.current!.push(m.chunk)
-            const nextChunk = socketState.nextChunk + 1
+            socketState.chunks.push(m.chunk)
+            socketState.nextChunk++
 
-            if (nextChunk < socketState.header.numChunks) {
-                setSocketState({ ...socketState, nextChunk })
+            if (socketState.nextChunk < socketState.header.numChunks) {
+                setSocketState({ ...socketState })
                 sendMessage(Message.create({ nextChunk: {} }))
                 return
             }
 
-            const data = new Blob(fileRecvRef.current!.map(chunk => chunk.data as BlobPart))
+            const data = new Blob(socketState.chunks.map(chunk => chunk.data as BlobPart))
             setContents({
                 type: "file",
                 contentType: socketState.header.contentType,
                 filename: socketState.header.filename,
                 data,
-                chunks: fileRecvRef.current!,
+                chunks: socketState.chunks,
                 incoming: true
             })
 
             setSocketState({ type: "Idle" })
-            fileRecvRef.current = null
         } else if (m.ack) {
             if (socketState.type !== "SendingText" && socketState.type !== "SendingFile") { return }
-
             setSocketState({ type: "Idle" })
-            fileRecvRef.current = null
         } else if (m.err) {
             const err = m.err
             if (err.fatal) {
                 setSocketState({ type: "Errored", error: new Error(err.desc) })
-                fileRecvRef.current = null
             } else {
                 setSocketState({ type: "Idle" })
-                fileRecvRef.current = null
                 pushMessage({ type: MessageType.ERROR, text: err.desc })
             }
         } else {
             setSocketState({ type: "Idle" })
-            fileRecvRef.current = null
             pushMessage({ type: MessageType.ERROR, text: "Unexpected message" })
         }
     }, [queue])
 
     useEffect(() => {
-        if (contents.type !== "file" || socketState.type !== "SendingFile") { return }
-        if (socketState.nextChunk === null) { return }
+        if (contents.type !== "file" || socketStatus.type !== "SendingFile") { return }
+        if (socketStatus.nextChunk === null) { return }
 
-        const index = socketState.nextChunk
+        const index = socketStatus.nextChunk
 
         if (index >= contents.chunks.length) {
             setSocketState({ type: "Idle" })
-            fileRecvRef.current = null
             pushMessage({ type: MessageType.ERROR, text: "File send might be corrupted" })
             return
         }
@@ -189,24 +251,22 @@ export function useSocketContents() {
         sendMessage(Message.create({
             chunk: contents.chunks[index]
         }))
-    }, [socketState])
+    }, [socketStatus])
 
     useEffect(() => {
-        if (socketState.type !== "Idle" || contents.incoming) { return }
+        if (getSocketState().type !== "Idle" || contents.incoming) { return }
 
         const timeout = setTimeout(() => {
-            if (socketState.type !== "Idle") { return } // FIXME: this captures old state
+            if (getSocketState().type !== "Idle") { return }
 
             if (contents.type === "text") {
                 setSocketState({ type: "SendingText" })
-                fileRecvRef.current = null
 
                 sendMessage(Message.create({
                     text: { data: contents.data }
                 }))
             } else {
                 setSocketState({ type: "SendingFile", nextChunk: null })
-                fileRecvRef.current = null
 
                 sendMessage(Message.create({
                     hdr: { filename: contents.filename, contentType: contents.contentType, numChunks: contents.chunks.length }
@@ -218,24 +278,23 @@ export function useSocketContents() {
     }, [contents])
 
     const reset = () => {
-        if (socketState.type !== "Idle") { return }
+        if (getSocketState().type !== "Idle") { return }
 
         sendMessage(Message.create({ text: { data: "" } })) // TODO: need special reset message type that would break from file transmission
 
         setContents({ type: "text", data: "", incoming: true })
 
         setSocketState({ type: "Idle" })
-        fileRecvRef.current = null
     }
 
     const setText = (text: string) => {
-        if (socketState.type !== "Idle") { return }
+        if (getSocketState().type !== "Idle") { return }
 
         setContents({ type: "text", data: text, incoming: false })
     }
 
     const setFile = (file: File) => {
-        if (socketState.type !== "Idle") { return }
+        if (getSocketState().type !== "Idle") { return }
 
         if (file.size > 150 * 1024 * 1024) {
             pushMessage({ type: MessageType.ERROR, text: "Maximum file size is 150 MB" })
@@ -272,6 +331,6 @@ export function useSocketContents() {
         reset,
         setText,
         setFile,
-        socketState
+        socketStatus
     }
 }
