@@ -10,7 +10,6 @@ interface FileContents {
     contentType: string
     filename: string
     data: Blob
-    chunks: Chunk[]
 }
 
 export type Contents = TextContents | FileContents

@@ -29,7 +29,9 @@ interface SendingText {
 
 interface SendingFile {
     type: "SendingFile"
+    header: FileHeader
     nextChunk: number | null
+    chunks: Chunk[]
 }
 
 interface ReceivingFile {
@@ -64,6 +66,7 @@ interface StatusSendingText {
 
 interface StatusSendingFile {
     type: "SendingFile"
+    header: FileHeader
     nextChunk: number | null
 }
 
@@ -130,7 +133,7 @@ export function useSocketContents() {
                 break
 
             case "SendingFile":
-                setSocketStatus({ type: "SendingFile", nextChunk: state.nextChunk })
+                setSocketStatus({ type: "SendingFile", header: state.header, nextChunk: state.nextChunk })
                 break
 
             case "ReceivingFile":
@@ -214,7 +217,6 @@ export function useSocketContents() {
                 contentType: socketState.header.contentType,
                 filename: socketState.header.filename,
                 data,
-                chunks: socketState.chunks,
                 incoming: true
             })
 
@@ -237,40 +239,55 @@ export function useSocketContents() {
     }, [queue])
 
     useEffect(() => {
-        if (contents.type !== "file" || socketStatus.type !== "SendingFile") { return }
-        if (socketStatus.nextChunk === null) { return }
+        const socketState = getSocketState()
 
-        const index = socketStatus.nextChunk
+        if (socketState.type !== "SendingFile") { return }
+        if (socketState.nextChunk === null) { return }
 
-        if (index >= contents.chunks.length) {
+        if (socketState.nextChunk >= socketState.header.numChunks) {
             setSocketState({ type: "Idle" })
             pushMessage({ type: MessageType.ERROR, text: "File send might be corrupted" })
             return
         }
 
         sendMessage(Message.create({
-            chunk: contents.chunks[index]
+            chunk: socketState.chunks[socketState.nextChunk]
         }))
     }, [socketStatus])
 
     useEffect(() => {
         if (getSocketState().type !== "Idle" || contents.incoming) { return }
 
-        const timeout = setTimeout(() => {
+        const chunksPromise = contents.type === "file" ? cut(contents.data) : undefined as never
+
+        const timeout = setTimeout(async () => {
             if (getSocketState().type !== "Idle") { return }
 
-            if (contents.type === "text") {
-                setSocketState({ type: "SendingText" })
+            switch (contents.type) {
+                case "text":
+                    setSocketState({ type: "SendingText" })
 
-                sendMessage(Message.create({
-                    text: { data: contents.data }
-                }))
-            } else {
-                setSocketState({ type: "SendingFile", nextChunk: null })
+                    sendMessage(Message.create({
+                        text: { data: contents.data }
+                    }))
+                    break
 
-                sendMessage(Message.create({
-                    hdr: { filename: contents.filename, contentType: contents.contentType, numChunks: contents.chunks.length }
-                }))
+                case "file":
+                    const chunks = await chunksPromise
+                    const header = { filename: contents.filename, contentType: contents.contentType, numChunks: chunks.length }
+
+                    setSocketState({
+                        type: "SendingFile",
+                        header,
+                        nextChunk: null,
+                        chunks
+                    })
+
+                    sendMessage(Message.create({ hdr: header }))
+                    break
+
+                default:
+                    contents satisfies never
             }
         }, 500)
 
@@ -311,14 +328,12 @@ export function useSocketContents() {
 
             const type = !file.type || file.type === "text/plain" ? "application/octet-stream" : file.type
             const data = new Blob([res])
-            const chunks = await cut(data)
 
             setContents({
                 type: "file",
                 contentType: type,
                 filename: file.name || "file",
                 data,
-                chunks,
                 incoming: false
             })
         }
